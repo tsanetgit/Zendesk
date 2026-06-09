@@ -76,10 +76,13 @@ Authorization: Bearer <accessToken>
 | `POST` | `/v1/login` | Authenticate, get JWT |
 | `GET` | `/v1/me` | Verify identity, get companyId/domain |
 | `GET` | `/v1/partners/{searchTerm}` | Find partner companyId/departmentId |
+| `GET` | `/v1/partners/search?query=...` | Semantic partner search (natural-language `query`; optional `limit`, default 10) |
 | `GET` | `/v1/forms/department/{departmentId}` | Get form template + required `documentId` |
 | `GET` | `/v1/forms/company/{companyId}` | Same, by company |
 | `POST` | `/v1/collaboration-requests` | Submit new outbound case |
-| `GET` | `/v1/collaboration-requests` | List cases (filter by type, status, updatedAfter) |
+| `GET` | `/v2/collaboration-requests` | List cases — **current**. Paginated: returns `{content:[...]}`. `type`/`status` filters accept `ALL`; also `internalCaseNumber`, `page`, `size` |
+| `GET` | `/v2/collaboration-requests/list` | List cases — non-paginated plain array. Also supports `updatedAfter`/`createdAfter` |
+| `GET` | `/v1/collaboration-requests` | Legacy list — still returns 200 (plain array). `/v2/` is current; `/v1/` retained for backward compatibility. **There is no `/v1/cases` endpoint** — a common wrong guess that returns 404 |
 | `GET` | `/v1/collaboration-requests/{token}` | Full case details including notes |
 | `POST` | `/v1/collaboration-requests/{token}/approval` | Accept an inbound case |
 | `POST` | `/v1/collaboration-requests/{token}/information-request` | Request more info |
@@ -98,6 +101,7 @@ OPEN → INFORMATION → ACCEPTED → CLOSED
 - `responded: false` = OPEN (SLA clock running)
 - `responded: true` = case has been Accepted/Rejected/Info Requested (SLA stopped)
 - Only the **submitting company** can call `/closure` — attempting it as the receiver returns an error
+- `PENDINGACTION` is an additional status returned/filterable by the `/v2/` list endpoints — surfaces cases awaiting an action from your side
 
 ### Case Statuses and the `responded` Flag
 **Critical:** The TSANet SLA tracks only the **initial acknowledgment** deadline (`respondBy`). Once `responded === true`, TSANet stops tracking SLA. Never show SLA countdowns or run breach detection on cases where `responded === true`. Gate all SLA logic on `responded === false`.
@@ -105,7 +109,7 @@ OPEN → INFORMATION → ACCEPTED → CLOSED
 ### Polling for Inbound Cases
 ```javascript
 // Incremental poll — store updatedAt of last synced record
-GET /v1/collaboration-requests?type=INBOUND&updatedAfter=2026-01-01T00:00:00Z
+GET /v2/collaboration-requests/list?type=INBOUND&updatedAfter=2026-01-01T00:00:00Z
 ```
 
 ### Notes API — Critical Behavior
@@ -560,7 +564,7 @@ Two jobs in one workflow file. Run at :00 and :50 every hour.
 
 ### Job 2: sla-monitor
 1. `POST /v1/login` → get fresh TSANet JWT
-2. `GET /v1/collaboration-requests?status=OPEN` → find all open cases
+2. `GET /v1/collaboration-requests?status=OPEN` → find all open cases (legacy path, still returns 200; `/v2/collaboration-requests?status=OPEN` is the current equivalent)
 3. For each case where `respondBy` is in the past:
    - Search Zendesk for ticket by TSANet token field value
    - Check if ticket already has `tsanet_sla_breached` tag (skip if so — prevents duplicate triggers)
@@ -686,7 +690,7 @@ Create in Admin Center → Objects and rules → Business rules → Triggers:
 |---|---|---|
 | `token` | string | **Primary key — save this immediately** |
 | `id` | int64 | Internal numeric ID |
-| `status` | enum | OPEN, INFORMATION, ACCEPTED, REJECTED, CLOSED |
+| `status` | enum | OPEN, INFORMATION, ACCEPTED, REJECTED, CLOSED, PENDINGACTION. `/v2/` list filters also accept `ALL` |
 | `direction` | enum | OUTBOUND (you submitted), INBOUND (you received) |
 | `priority` | enum | LOW, MEDIUM, HIGH |
 | `respondBy` | datetime | SLA deadline — truncate to YYYY-MM-DD for Zendesk date fields |
