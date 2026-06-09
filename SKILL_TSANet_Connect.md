@@ -24,7 +24,7 @@ A complete TSANet Connect + Zendesk integration has three layers:
 │  LAYER 1: ZAF Sidebar App (agents use this)             │
 │  • sidebar panel on every Zendesk ticket                │
 │  • reads/writes TSANet API via ZAF proxy                │
-│  • background page polls for inbound cases every 5 min  │
+│  • background page polls for inbound cases every 1 min  │
 │  • mirrors TSANet notes → Zendesk internal comments     │
 └─────────────────────────────────────────────────────────┘
 ┌─────────────────────────────────────────────────────────┐
@@ -122,7 +122,7 @@ POST /v1/collaboration-requests/{token}/notes
 ```
 
 ### Notes: HTML in Responses
-TSANet returns note content as HTML (e.g. `<p>text</p>`, `<br/>` tags). Strip HTML before displaying:
+TSANet returns **note** content (`summary` / `description`) as HTML (e.g. `<p>text</p>`, `<br/>` tags). Strip it to plain text before displaying. (The process form's `adminNote` is the exception — it is authored HTML meant to render, not strip; see **Process Form Rendering** below.)
 ```javascript
 function stripHtml(html) {
   if (!html) return '';
@@ -133,6 +133,50 @@ function stripHtml(html) {
     .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&nbsp;/g, ' ')
     .trim();
+}
+```
+
+### Process Form Rendering — Custom Field Options and `adminNote`
+When you render a partner's process form (`GET /v1/forms/company/{id}` or `/forms/department/{id}`), two fields have non-obvious shapes that cost real bugs:
+
+**SELECT custom field `options` are newline-delimited, not comma-delimited.** The `customFields[].options` string separates choices with newlines (CRLF), e.g. `"AHV\r\nESXi\r\nHyper-V\r\nKVM\r\nNA\r\nXenserver"`. The structured `selections[]` array exists in the schema but is frequently empty. Splitting `options` on commas collapses every choice into a single option. Parse in this order: `selections[].value` if present, else split `options` on newlines, else fall back to commas.
+```javascript
+function parseOptions(f) {
+  if (Array.isArray(f.selections) && f.selections.length)
+    return f.selections.map(function(s){ return s && s.value != null ? String(s.value).trim() : ''; }).filter(Boolean);
+  var raw = f.options || '';
+  var p = raw.split(/\r\n|\r|\n/).map(function(o){ return o.trim(); }).filter(Boolean);
+  return p.length > 1 ? p : raw.split(',').map(function(o){ return o.trim(); }).filter(Boolean);
+}
+```
+
+**`adminNote` ("Partner instructions") is authored HTML — sanitize and render, do not strip or escape.** Unlike note descriptions (strip those to text), the form's `adminNote` is HTML the partner authored — formatted text and links — and is meant to render, matching the TSANet web app. Escaping it shows raw tags (`<p>`, `<a href...>`); stripping it loses the links. Sanitize against a tag allowlist and render: allow `p/br/strong/em/b/i/u/ul/ol/li/a/span`, force links to `target="_blank" rel="noopener noreferrer"` with `http(s):`-only hrefs, and drop scripts, event handlers, and styles.
+```javascript
+function sanitizeHtml(html) {
+  if (!html) return '';
+  var ALLOWED = { P:1, BR:1, STRONG:1, B:1, EM:1, I:1, U:1, UL:1, OL:1, LI:1, A:1, SPAN:1 };
+  var doc = new DOMParser().parseFromString(String(html), 'text/html');
+  (function clean(node){
+    var c = node.firstChild;
+    while (c) {
+      var next = c.nextSibling;
+      if (c.nodeType === 1) {                 // element
+        clean(c);
+        if (ALLOWED[c.tagName]) {
+          [].slice.call(c.attributes).forEach(function(a){
+            var n = a.name.toLowerCase();
+            if (c.tagName === 'A' && n === 'href') { if (!/^https?:\/\//i.test(c.getAttribute('href') || '')) c.removeAttribute('href'); }
+            else c.removeAttribute(a.name);
+          });
+          if (c.tagName === 'A') { c.setAttribute('target','_blank'); c.setAttribute('rel','noopener noreferrer'); }
+        } else { while (c.firstChild) node.insertBefore(c.firstChild, c); node.removeChild(c); }
+      } else if (c.nodeType === 8) {           // comment
+        node.removeChild(c);
+      }
+      c = next;
+    }
+  })(doc.body);
+  return doc.body.innerHTML;
 }
 ```
 
@@ -370,7 +414,7 @@ The `background.html` page runs continuously while any Zendesk tab is open. Use 
 
 ```javascript
 // background.html — polling loop
-var POLL_INTERVAL = 5 * 60 * 1000; // 5 minutes
+var POLL_INTERVAL = 60 * 1000; // 1 minute (JWT is cached ~50 min, so a short interval does not increase login calls; ~60s is the practical floor before TSANet rate-limits)
 
 function pollLoop() {
   checkInboundCases();
@@ -574,7 +618,9 @@ Create in Admin Center → Objects and rules → Business rules → Triggers:
 | Action buttons 2–4 do nothing silently | `prompt()`/`confirm()` blocked in cross-origin iframes | Replace with custom inline modal HTML |
 | Accept returns "Error processing request" | `engineerEmail` required but undocumented | Include `engineerEmail` in approval POST body |
 | Accept fails with domain validation error | Agent's Zendesk email ≠ TSANet company domain | Use `settings.tsanet_username` as `engineerEmail` |
-| Notes show raw HTML tags | TSANet returns HTML-formatted note content | Add `stripHtml()` helper; apply before display |
+| Notes show raw HTML tags | TSANet returns HTML-formatted note `summary`/`description` | Add `stripHtml()` helper; apply before display |
+| Picklist (SELECT) field shows all choices as one combined option | `options` string is newline-delimited (CRLF), not comma; `selections[]` often empty | Split `options` on `\r\n`/`\n` (fall back to commas); prefer `selections[].value` |
+| Form "Partner instructions" (`adminNote`) shows raw HTML tags | `adminNote` is authored HTML but was escaped/stripped before display | Sanitize against a tag allowlist and render (links → new tab); do not escape or strip it |
 | Add Note causes duplication in TSANet web app | TSANet renders both `summary` and `description` as separate labeled sections | Use two-field modal (Subject/Details); only send `description` if user fills it |
 | Close button fails on inbound cases | TSANet only allows the submitting company to close | Show Close button only for outbound (`direction === 'OUTBOUND'`) cases |
 | Respond By field not updating in Zendesk | Zendesk Date fields silently reject ISO datetimes | Truncate TSANet `respondBy` to `YYYY-MM-DD` with `.substring(0, 10)` |
@@ -605,6 +651,8 @@ Create in Admin Center → Objects and rules → Business rules → Triggers:
 - **Test submissions:** set `testSubmission: true` on POST to submit without creating real SLA timers or notifications.
 - **`token` is the primary key** — save it immediately on case creation. The numeric `id` field exists but `token` is used in all API paths.
 - **Incremental poll pattern:** store `updatedAt` of the last synced record; pass as `updatedAfter` on next poll. This matches the Salesforce connector's 15-minute sync pattern.
+- **SELECT field `options` are newline-delimited** — the process-form `customFields[].options` string separates choices with `\r\n`, not commas, and `selections[]` is often empty. Split on newlines. See *Process Form Rendering*.
+- **`adminNote` is HTML to render, not strip** — the form's admin note ("Partner instructions") is authored HTML (links); sanitize and render it. Only note `summary`/`description` should be stripped to plain text.
 
 ---
 
