@@ -14,7 +14,7 @@
  * Runs silently whenever Zendesk is open in the browser.
  * No UI. No agent interaction required.
  *
- * Every 5 minutes:
+ * Every poll cycle (POLL_INTERVAL_MS):
  *   1. Fetch all OPEN/INFORMATION inbound collaboration requests from TSANet
  *   2. For each one, search Zendesk for an existing ticket with that token
  *   3. Create a Zendesk ticket for any that are missing
@@ -25,7 +25,7 @@
 (function() {
   'use strict';
 
-  var POLL_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+  var POLL_INTERVAL_MS = 60 * 1000; // 1 minute (JWT is cached ~50 min, so this does not increase login calls)
   var client   = null;
   var settings = {};
   var _jwt     = null;
@@ -48,9 +48,9 @@
         return;
       }
 
-      console.log('[TSANet BG] Started — polling every 5 minutes');
+      console.log('[TSANet BG] Started — polling every 1 minute');
 
-      // Run immediately on startup, then every 5 minutes
+      // Run immediately on startup, then on POLL_INTERVAL_MS
       pollForInboundCases();
       pollForSlaBreaches();
       setInterval(pollForInboundCases, POLL_INTERVAL_MS);
@@ -101,7 +101,7 @@
   }
 
   // ── SLA Breach Detection ──────────────────────────────────────────────────
-  // Every 5 minutes: find any OPEN/INFORMATION cases past their respondBy
+  // Every poll cycle: find any OPEN/INFORMATION cases past their respondBy
   // deadline and add tag tsanet_sla_breached to the corresponding Zendesk ticket.
   // The tag is only added once (idempotent check prevents repeat notifications).
   // A Zendesk trigger fires on tag addition → emails the assignee.

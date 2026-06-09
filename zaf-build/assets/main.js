@@ -589,7 +589,7 @@ function renderCollabForm(formData) {
   form.innerHTML = '';
   if (formData.adminNote) {
     var n = document.createElement('div'); n.className = 'admin-note';
-    n.innerHTML = '<strong>Partner instructions:</strong> ' + esc(formData.adminNote);
+    n.innerHTML = '<strong>Partner instructions:</strong> ' + sanitizeHtml(formData.adminNote);
     form.appendChild(n);
   }
   addFormField(form, 'Priority', '<select id="form-priority"><option value="HIGH">HIGH (P1)</option><option value="MEDIUM" selected>MEDIUM (P2)</option><option value="LOW">LOW (P3)</option></select>');
@@ -597,7 +597,12 @@ function renderCollabForm(formData) {
   addFormField(form, 'Problem Description *', '<textarea id="form-description" required></textarea>');
   (formData.customFields || []).forEach(function(f) {
     if (f.type === 'SELECT') {
-      var opts = (f.options || '').split(',').map(function(o) { return o.trim(); }).filter(Boolean)
+      // Picklist values come from the structured selections[] array (FieldMetadataDTO).
+      // Fall back to the legacy comma-delimited options string only if selections is absent.
+      var optValues = (Array.isArray(f.selections) && f.selections.length)
+        ? f.selections.map(function(s) { return s && s.value != null ? String(s.value).trim() : ''; }).filter(Boolean)
+        : (f.options || '').split(',').map(function(o) { return o.trim(); }).filter(Boolean);
+      var opts = optValues
         .map(function(o) { return '<option value="' + esc(o) + '">' + esc(o) + '</option>'; }).join('');
       addFormField(form, f.label + (f.required ? ' *' : ''), '<select id="cf-' + f.fieldId + '"><option value="">Select...</option>' + opts + '</select>');
     } else {
@@ -827,6 +832,47 @@ function slaDisplay(respondBy) {
 function esc(s) {
   if (!s) return '';
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// Render partner-authored adminNote HTML safely. Allowlists a small set of
+// formatting tags, strips everything else (scripts, event handlers, styles,
+// inline CSS), and forces links to open in a new tab with noopener. Anything
+// outside the allowlist is unwrapped to its text content rather than dropped.
+function sanitizeHtml(html) {
+  if (!html) return '';
+  var ALLOWED = { P:1, BR:1, STRONG:1, B:1, EM:1, I:1, U:1, UL:1, OL:1, LI:1, A:1, SPAN:1 };
+  var doc = new DOMParser().parseFromString(String(html), 'text/html');
+  (function clean(node) {
+    var child = node.firstChild;
+    while (child) {
+      var next = child.nextSibling;
+      if (child.nodeType === 1) {            // element
+        clean(child);                        // sanitize descendants first
+        if (ALLOWED[child.tagName]) {
+          var attrs = Array.prototype.slice.call(child.attributes);
+          for (var i = 0; i < attrs.length; i++) {
+            var name = attrs[i].name.toLowerCase();
+            if (child.tagName === 'A' && name === 'href') {
+              if (!/^https?:\/\//i.test(child.getAttribute('href') || '')) child.removeAttribute('href');
+            } else {
+              child.removeAttribute(attrs[i].name);
+            }
+          }
+          if (child.tagName === 'A') {
+            child.setAttribute('target', '_blank');
+            child.setAttribute('rel', 'noopener noreferrer');
+          }
+        } else {                             // disallowed tag: unwrap to its children
+          while (child.firstChild) node.insertBefore(child.firstChild, child);
+          node.removeChild(child);
+        }
+      } else if (child.nodeType === 8) {     // comment
+        node.removeChild(child);
+      }
+      child = next;
+    }
+  })(doc.body);
+  return doc.body.innerHTML;
 }
 
 function stripHtml(html) {
