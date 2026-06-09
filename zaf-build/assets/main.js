@@ -1,5 +1,5 @@
 /**
- * TSANet Connect ZAF App — v1.0.30
+ * TSANet Connect ZAF App — v1.0.31
  * client.metadata() with .then() chains after app.registered
  * Includes: New Collaboration, Sync Inbound Cases, action buttons
  */
@@ -597,11 +597,18 @@ function renderCollabForm(formData) {
   addFormField(form, 'Problem Description *', '<textarea id="form-description" required></textarea>');
   (formData.customFields || []).forEach(function(f) {
     if (f.type === 'SELECT') {
-      // Picklist values come from the structured selections[] array (FieldMetadataDTO).
-      // Fall back to the legacy comma-delimited options string only if selections is absent.
-      var optValues = (Array.isArray(f.selections) && f.selections.length)
-        ? f.selections.map(function(s) { return s && s.value != null ? String(s.value).trim() : ''; }).filter(Boolean)
-        : (f.options || '').split(',').map(function(o) { return o.trim(); }).filter(Boolean);
+      // Picklist values: prefer the structured selections[] array (FieldMetadataDTO);
+      // otherwise parse the options string. TSANet delimits options with newlines
+      // (CRLF), so split on newlines first and fall back to commas for any legacy
+      // comma-delimited form.
+      var optValues;
+      if (Array.isArray(f.selections) && f.selections.length) {
+        optValues = f.selections.map(function(s) { return s && s.value != null ? String(s.value).trim() : ''; }).filter(Boolean);
+      } else {
+        var rawOpts = f.options || '';
+        optValues = rawOpts.split(/\r\n|\r|\n/).map(function(o) { return o.trim(); }).filter(Boolean);
+        if (optValues.length <= 1) optValues = rawOpts.split(',').map(function(o) { return o.trim(); }).filter(Boolean);
+      }
       var opts = optValues
         .map(function(o) { return '<option value="' + esc(o) + '">' + esc(o) + '</option>'; }).join('');
       addFormField(form, f.label + (f.required ? ' *' : ''), '<select id="cf-' + f.fieldId + '"><option value="">Select...</option>' + opts + '</select>');

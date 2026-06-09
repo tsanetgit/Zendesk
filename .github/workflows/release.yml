@@ -4,7 +4,7 @@ name: Package ZAF app
 # version tag is pushed. The zip is a pure package of the committed zaf-build/
 # files — no transpile step — so a release can never diverge from the repo.
 #
-#   git tag v1.0.30 && git push origin v1.0.30
+#   git tag vX.Y.Z && git push origin vX.Y.Z
 
 on:
   push:
