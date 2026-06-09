@@ -2,8 +2,9 @@
 
 A Zendesk Apps Framework (ZAF) sidebar app that embeds TSANet Connect collaboration directly into the Zendesk ticket view.
 
-**Current version:** v1.0.29
+**Current version:** see [`manifest.json`](manifest.json) and the [latest release](https://github.com/tsanetgit/Zendesk/releases).
 **Distribution:** Private ZAF app, ZIP upload via Zendesk Admin Center.
+**Canonical source:** this repository. The files under `zaf-build/` are edited directly and are exactly what ships — there is no separate source tree that compiles into them.
 
 ---
 
@@ -33,42 +34,46 @@ zaf-build/
 ├── assets/
 │   ├── index.html             ← Sidebar HTML shell + ZAF SDK CDN script
 │   ├── main.js                ← All app logic (single bundled file)
-│   ├── background.html        ← Background page (5-min poller, SLA breach detection)
+│   ├── background.html        ← Background page (1-min poller, SLA breach detection)
 │   └── logo.png               ← App icon (128×128 transparent PNG)
 └── translations/
     └── en.json                ← Localization strings (required even if minimal)
 ```
 
-**About the structure:** This bundle ships a *flat, pre-bundled* JavaScript file (`assets/main.js`, ~38 KB, ~840 lines) rather than a multi-file source tree. There is no Vite build step required — what you see is what runs in Zendesk. To customize, edit `main.js` directly and rezip.
+**About the structure:** This bundle ships a *flat, hand-maintained* JavaScript file (`assets/main.js`, ~840 lines) rather than a multi-file source tree. There is no Vite build step and nothing compiles into it — what you see is what runs in Zendesk. To customize, edit `main.js` directly and repackage (see below).
 
-A multi-file Vite-based source tree (with `src/api/`, `src/components/`, `src/utils/`) existed in earlier versions and is preserved at `tsanet-connect-zendesk-zaf/zaf-app/` for reference, but it has not been kept in sync with the bundled `assets/main.js` — it represents v1.0.20-era code. A proper re-modularization is planned for the v1.1 milestone. **Do not start customization from the `zaf-app/` tree** — start from this bundle (`zaf-build/`).
+> **Historical note:** an older multi-file Vite source tree (`shawn-tsanet/tsanet-connect-zendesk-zaf`, under `zaf-app/`) existed but diverged from the shipped app — it had no background poller and older lifecycle logic — and has been **archived read-only**. Do not rebuild from it; doing so will regress live behavior. This repository is the only source of truth.
 
 ---
 
-## Customizing and rebuilding
+## Editing and packaging
+
+This bundle **is** the source. Edit the files under `zaf-build/` directly; there is no transpile step.
 
 ```bash
-# 1. Unzip this bundle to a working directory
-unzip tsanet-connect-zaf-app-source.zip -d my-tsanet-app
+# 1. Edit the files under zaf-build/ (assets/main.js, index.html,
+#    background.html, manifest.json, translations/en.json).
+#    main.js has clearly-marked sections:
+#      // ── TSANet Auth ─────────   // ── Modal helpers ───────
+#      // ── Notes ───────────────   // ── Background sync ─────
 
-# 2. Edit assets/main.js (and optionally index.html, background.html, manifest.json)
-# Search for clearly-marked sections like:
-#   // ── TSANet Auth ─────────
-#   // ── Modal helpers ───────
-#   // ── Notes ───────────────
-#   // ── Background sync ─────
+# 2. Bump "version" in zaf-build/manifest.json
 
-# 3. Bump the version in manifest.json
-#    "version": "1.0.30"
+# 3. Package the installable zip (pure zip of the committed files, no build):
+bash scripts/package.sh          # → dist/tsanet-connect-v<version>.zip
 
-# 4. Repackage the bundle
-cd my-tsanet-app
-zip -r ../my-tsanet-app-v1.0.30.zip zaf-build -x "*.DS_Store"
-
-# 5. Upload via Admin Center → Apps and integrations → Zendesk Support apps → Update
+# 4. Upload via Admin Center → Apps and integrations → Zendesk Support apps → Update
 ```
 
-That's it. No `npm install`, no `vite build`, no scripts.
+### Releasing
+
+Tag the commit and CI packages the zip and attaches it to a GitHub Release automatically (see [`.github/workflows/release.yml`](../.github/workflows/release.yml)):
+
+```bash
+git tag v1.0.30 && git push origin v1.0.30
+```
+
+No `npm install`, no `vite build`. The zip is exactly the committed files.
 
 ---
 
@@ -97,7 +102,7 @@ To find your Field IDs: Admin Center → Objects and rules → Tickets → Field
 - **TSANet auth** uses JWT Bearer tokens cached for ~50 minutes; refreshed automatically.
 - **Zendesk auth** is automatic — ZAF inherits the agent's session via `client.request()`.
 - **No external server** required for the sidebar app itself. All API calls proxy through Zendesk.
-- **Background page** (`assets/background.html`) runs while any agent has Zendesk open — polls TSANet every 5 minutes for new inbound cases and SLA breaches.
+- **Background page** (`assets/background.html`) runs while any agent has Zendesk open — polls TSANet every minute for new inbound cases and SLA breaches. The poll interval is the `POLL_INTERVAL_MS` constant; the JWT is cached ~50 min so the interval does not drive login volume.
 - **Server-side complement:** a GitHub Actions workflow (separate from this bundle, see ZIS Quick Start) refreshes the ZIS bearer token and detects SLA breaches when no agent is online. Both pieces are needed for a complete deployment.
 - **Stateless** — all state lives in Zendesk ticket fields and the TSANet API. The app holds no database.
 

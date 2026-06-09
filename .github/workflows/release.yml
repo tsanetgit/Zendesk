@@ -1,0 +1,36 @@
+name: Package ZAF app
+
+# Build the installable ZAF zip and attach it to a GitHub Release whenever a
+# version tag is pushed. The zip is a pure package of the committed zaf-build/
+# files — no transpile step — so a release can never diverge from the repo.
+#
+#   git tag v1.0.30 && git push origin v1.0.30
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build package
+        run: bash scripts/package.sh
+
+      - name: Attach zip to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "${{ github.ref_name }}" >/dev/null 2>&1; then
+            gh release upload "${{ github.ref_name }}" dist/*.zip --clobber
+          else
+            gh release create "${{ github.ref_name }}" dist/*.zip \
+              --title "${{ github.ref_name }}" \
+              --notes "Automated ZAF app package for ${{ github.ref_name }}. Install via Zendesk Admin Center → Apps and integrations → Zendesk Support apps → Upload/Update private app."
+          fi

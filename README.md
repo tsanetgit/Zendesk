@@ -11,3 +11,7 @@ Use Issues https://github.com/tsanetgit/Zendesk/issues to log bugs and enhanceme
 
 <b>CURRENT PACKAGE VERSION:</b>
 View the latest release https://github.com/tsanetgit/Zendesk/releases for the package link
+
+<b>For maintainers — source of truth:</b>
+
+This repository is the canonical source for the ZAF app. The deployed bundle under [`zaf-build/`](zaf-build/) is edited directly (no transpile/build step) and packaged with [`scripts/package.sh`](scripts/package.sh). Pushing a `v*` tag builds the installable zip and attaches it to a GitHub Release automatically. See [`zaf-build/README.md`](zaf-build/README.md) for the full edit-and-package loop. The old Vite source repo is archived and must not be used.
