@@ -51,7 +51,7 @@ ZIS scheduled polling (`flow_poll_tsanet`) is architecturally broken — ZIS flo
 ### Environments
 | Environment | Base URL |
 |---|---|
-| Dev | `https://connect2.tahoelab.us/v1` |
+| Dev | `` |
 | Beta | `https://connect2.tsanet.net/v1` |
 | Production | `https://connect2.tsanet.org/v1` |
 
