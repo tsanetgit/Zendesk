@@ -51,8 +51,11 @@ ZIS scheduled polling (`flow_poll_tsanet`) is architecturally broken — ZIS flo
 ### Environments
 | Environment | Base URL |
 |---|---|
+| Dev | `https://connect2.tahoelab.us/v1` |
 | Beta | `https://connect2.tsanet.net/v1` |
 | Production | `https://connect2.tsanet.org/v1` |
+
+> **Dev** (`tahoelab`) is where API and OAuth changes iterate. It serves the same `/v1` contract as Beta/Production. To reach it from the ZAF app, `connect2.tahoelab.us` must also be in the manifest `domainWhitelist` (otherwise calls are CORS-blocked).
 
 ### Authentication
 JWT Bearer. Always call `POST /v1/login` first. Token expires in ~60 minutes.
