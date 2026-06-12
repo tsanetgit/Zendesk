@@ -10,6 +10,8 @@ This guide covers two things:
 
 > **Shortest path:** if you skip the optional SLA monitor, you need no GitHub repository, no secrets, and no workflow — Steps 1–4 and you're done.
 
+> **Flow bundle:** the ready-made ZIS flow bundle for event-driven inbound (ping-then-pull) lives in [`zis/`](zis/) with its own deploy guide.
+
 ---
 
 ## Prerequisites

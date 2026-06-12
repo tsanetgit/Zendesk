@@ -1,0 +1,202 @@
+{
+  "name": "tsanet_connect",
+  "description": "TSANet Connect \u2014 event-driven inbound (ping-then-pull). Pull via the Entra OAuth connection; Zendesk actions via the 'zendesk' basic-auth connection.",
+  "zis_template_version": "2019-10-14",
+  "resources": {
+    "action_create_ticket": {
+      "type": "ZIS::Action::Http",
+      "properties": {
+        "definition": {
+          "headers": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "method": "POST",
+          "path": "/api/v2/tickets.json",
+          "requestBody": {
+            "ticket": {
+              "comment": {
+                "body": "\u2b05\ufe0f New inbound TSANet Collaboration Request from {{$.partner_name}}.\n\nPriority: {{$.priority}}\nToken: {{$.requestToken}}\n\nUse the TSANet Connect app in the sidebar to Accept, Request More Info, or Reject.",
+                "public": false
+              },
+              "custom_fields": [
+                {
+                  "id": 48849323029652,
+                  "value": "{{$.requestToken}}"
+                },
+                {
+                  "id": 48849333960724,
+                  "value": "tsanet_status_open"
+                },
+                {
+                  "id": 48849315296660,
+                  "value": "{{$.partner_name}}"
+                }
+              ],
+              "description": "Inbound TSANet Collaboration Request received.\n\nFrom: {{$.partner_name}}\nPriority: {{$.priority}}\nToken: {{$.requestToken}}\n\n{{$.problem_description}}",
+              "priority": "normal",
+              "subject": "TSANet Inbound from {{$.partner_name}}: {{$.summary}}",
+              "tags": [
+                "tsanet_inbound",
+                "tsanet_status_open"
+              ]
+            }
+          },
+          "connectionName": "zendesk"
+        },
+        "name": "action_create_ticket"
+      }
+    },
+    "action_get_collaboration": {
+      "type": "ZIS::Action::Http",
+      "properties": {
+        "definition": {
+          "connectionName": "tsanet_oauth",
+          "method": "GET",
+          "url": "https://connect2.tsanet.org/v1/collaboration-requests/{{$.requestToken}}"
+        },
+        "name": "action_get_collaboration"
+      }
+    },
+    "action_search_ticket": {
+      "type": "ZIS::Action::Http",
+      "properties": {
+        "definition": {
+          "method": "GET",
+          "path": "/api/v2/search.json?query=custom_field_48849323029652:{{$.requestToken}}&type=ticket",
+          "connectionName": "zendesk"
+        },
+        "name": "action_search_ticket"
+      }
+    },
+    "action_update_ticket": {
+      "type": "ZIS::Action::Http",
+      "properties": {
+        "definition": {
+          "headers": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "method": "PUT",
+          "path": "/api/v2/tickets/{{$.ticket_id}}.json",
+          "requestBody": {
+            "ticket": {
+              "additional_tags": [
+                "tsanet_updated"
+              ],
+              "comment": {
+                "body": "TSANet update \u2014 status: {{$.collab_status}} \u2014 token: {{$.requestToken}}",
+                "public": false
+              },
+              "custom_fields": [
+                {
+                  "id": 48849333960724,
+                  "value": "{{$.collab_status}}"
+                },
+                {
+                  "id": 48849315296660,
+                  "value": "{{$.partner_name}}"
+                },
+                {
+                  "id": 48849323088276,
+                  "value": "{{$.respond_by}}"
+                }
+              ]
+            }
+          },
+          "connectionName": "zendesk"
+        },
+        "name": "action_update_ticket"
+      }
+    },
+    "flow_handle_ping": {
+      "type": "ZIS::Flow",
+      "properties": {
+        "definition": {
+          "StartAt": "GetCollaboration",
+          "States": {
+            "CheckTicketExists": {
+              "Choices": [
+                {
+                  "Next": "TransformForUpdate",
+                  "NumericGreaterThan": 0,
+                  "Variable": "$.search.count"
+                }
+              ],
+              "Default": "CreateTicket",
+              "Type": "Choice"
+            },
+            "CreateTicket": {
+              "ActionName": "zis:tsanet_connect:action:action_create_ticket",
+              "End": true,
+              "Parameters": {
+                "partner_name.$": "$.collab.submitCompanyName",
+                "priority.$": "$.collab.priority",
+                "problem_description.$": "$.collab.description",
+                "requestToken.$": "$.collab.token",
+                "summary.$": "$.collab.summary"
+              },
+              "ResultPath": "$.created",
+              "Type": "Action"
+            },
+            "GetCollaboration": {
+              "ActionName": "zis:tsanet_connect:action:action_get_collaboration",
+              "Next": "SearchTicket",
+              "Parameters": {
+                "requestToken.$": "$.input.requestToken"
+              },
+              "ResultPath": "$.collab",
+              "Type": "Action"
+            },
+            "SearchTicket": {
+              "ActionName": "zis:tsanet_connect:action:action_search_ticket",
+              "Next": "CheckTicketExists",
+              "Parameters": {
+                "requestToken.$": "$.collab.token"
+              },
+              "ResultPath": "$.search",
+              "Type": "Action"
+            },
+            "UpdateTicket": {
+              "ActionName": "zis:tsanet_connect:action:action_update_ticket",
+              "End": true,
+              "Parameters": {
+                "collab_status.$": "$.xform.status",
+                "partner_name.$": "$.collab.receiveCompanyName",
+                "requestToken.$": "$.collab.token",
+                "respond_by.$": "$.xform.respond_by",
+                "ticket_id.$": "$.search.results[0].id"
+              },
+              "ResultPath": "$.update",
+              "Type": "Action"
+            },
+            "TransformForUpdate": {
+              "Type": "Action",
+              "ActionName": "zis:common:transform:Jq",
+              "Parameters": {
+                "expr": "{status: (\"tsanet_status_\" + (.collab.status // \"\" | ascii_downcase)), respond_by: ((.collab.respondBy // \"\")[0:10])}",
+                "data.$": "$"
+              },
+              "ResultPath": "$.xform",
+              "Next": "UpdateTicket"
+            }
+          }
+        },
+        "name": "flow_handle_ping"
+      }
+    },
+    "jobspec_handle_ping": {
+      "type": "ZIS::JobSpec",
+      "properties": {
+        "event_source": "tsanet",
+        "event_type": "collaboration_event",
+        "flow_name": "zis:tsanet_connect:flow:flow_handle_ping",
+        "name": "jobspec_handle_ping"
+      }
+    }
+  }
+}
