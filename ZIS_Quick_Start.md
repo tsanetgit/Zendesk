@@ -10,6 +10,8 @@ This guide sets up two automated server-side jobs for TSANet Connect:
 
 Both jobs run as GitHub Actions on a schedule — no server required.
 
+> **Status note:** the bearer-token refresh job is an interim workaround for the TSANet JWT's 60-minute expiry. An OAuth 2.0 client-credentials replacement (Microsoft Entra), where ZIS mints and renews tokens itself with no refresh job, has been validated and is tracked in [issue #1](https://github.com/tsanetgit/Zendesk/issues/1). This guide remains the supported method until that scheme is generally available.
+
 ---
 
 ## Prerequisites
@@ -345,7 +347,7 @@ An earlier design included a ZIS flow (`flow_poll_tsanet`) intended to poll TSAN
 - **GitHub Actions `sla-monitor`** — server-side SLA breach detection regardless of browser state
 
 **ZIS inbound webhook is blocked**  
-TSANet's webhook notifications are sent without an `Authorization` header, which ZIS requires for inbound webhook flows. Until TSANet adds configurable webhook authentication, ZIS cannot receive push notifications from TSANet. The ZAF background poller covers this gap via polling.
+TSANet's webhook notifications are sent without an `Authorization` header, which ZIS requires for inbound webhook flows. Until TSANet adds configurable webhook authentication, ZIS cannot receive push notifications from TSANet. The ZAF background poller covers this gap via polling. A `callbackAuth` capability on webhook registration is planned to resolve this — tracked in [issue #2](https://github.com/tsanetgit/Zendesk/issues/2).
 
 **Zendesk Views API cannot set custom field columns**  
 If you create or modify a Zendesk view via the API and include `custom_field_XXXXXXX` column IDs in `execution.columns`, the API accepts the request without error but silently reverts to the original columns. Custom field columns on views must be configured manually in **Admin Center → Workspaces → Views**.

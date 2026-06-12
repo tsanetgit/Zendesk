@@ -51,11 +51,8 @@ ZIS scheduled polling (`flow_poll_tsanet`) is architecturally broken — ZIS flo
 ### Environments
 | Environment | Base URL |
 |---|---|
-| Dev | `` |
 | Beta | `https://connect2.tsanet.net/v1` |
 | Production | `https://connect2.tsanet.org/v1` |
-
-> **Dev** (`tahoelab`) is where API and OAuth changes iterate. It serves the same `/v1` contract as Beta/Production. To reach it from the ZAF app, `connect2.tahoelab.us` must also be in the manifest `domainWhitelist` (otherwise calls are CORS-blocked).
 
 ### Authentication
 JWT Bearer. Always call `POST /v1/login` first. Token expires in ~60 minutes.
@@ -71,6 +68,15 @@ Authorization: Bearer <accessToken>
 ```
 
 > **Verify identity after login:** always call `GET /v1/me` during development to confirm credentials and capture `companyId`. The `company.domain` field is important — see Accept bug below.
+
+### Authentication — OAuth 2.0 client credentials (Microsoft Entra, rolling out)
+A second auth scheme is being rolled out for server-to-server integrations and has been validated in TSANet's development environment (tracked in issue #1):
+
+- Obtain a token from Microsoft Entra via the **client credentials** grant: `POST https://login.microsoftonline.com/{tenant-id}/oauth2/v2.0/token` with `grant_type=client_credentials`, your TSANet-issued `client_id`/`client_secret`, and `scope=api://{audience}/.default` (TSANet provides the audience value). Pass the result as a Bearer token.
+- **Service principal provisioning is required.** The API accepts an app-only token only if your service principal's object ID has been provisioned by TSANet; provisioning is also what maps your tokens to your member company. Contact TSANet with your service principal OID to be onboarded.
+- The API accepts the default v1-format Entra token (bare-GUID `aud` claim) — no `requestedAccessTokenVersion` change is needed on the client app registration.
+- Tokens live ~60 minutes, but unlike the legacy `/v1/login` JWT, the **caller re-mints automatically from the long-lived client credential** — there is no static token to refresh. This is what retires the ZIS bearer-token refresh workaround (see ZIS section).
+- Entra client secrets are random strings that can begin with punctuation (a leading `.` has been seen in production). Store and transmit them verbatim; "cleaning" the value breaks authentication with `AADSTS7000215`.
 
 ### Key Endpoints
 
@@ -514,6 +520,8 @@ zip -r your-app-v1.0.0.zip manifest.json assets/ translations/ -x "*.DS_Store"
 
 ## ZIS Bearer Token Setup
 
+> **This pattern is being superseded.** The static bearer-token connection (and the GitHub Actions refresh job that keeps it alive) is the workaround for the TSANet JWT's 60-minute expiry. The replacement — a ZIS **OAuth client-credentials connection** that mints and renews Entra tokens itself — has been validated and is documented below ("ZIS OAuth Client-Credentials Connection"). Use the bearer pattern for Beta/Production until the Entra scheme is generally available; use the OAuth pattern for new work once your service principal is provisioned.
+
 ZIS needs to store the live TSANet JWT so that ZIS flows can call the TSANet API. This requires three one-time setup steps:
 
 ### Step 1 — Create a ZIS Integration (once per Zendesk subdomain)
@@ -541,6 +549,44 @@ curl -s -u "EMAIL/token:API_TOKEN" \
   "https://SUBDOMAIN.zendesk.com/api/services/zis/integrations/tsanet_connect/connections"
 ```
 Note: ZIS management endpoints (`/api/services/zis/`) **always return 404 with a standard API token**. They require a ZIS OAuth token (obtained via the OAuth2 flow with your ZIS OAuth client). This is by design — it's not an error.
+
+---
+
+## ZIS OAuth Client-Credentials Connection (Entra — successor to the bearer pattern)
+
+Once TSANet has provisioned your service principal (see the Entra authentication section), ZIS can hold the long-lived client credential and mint/renew the short-lived Entra tokens itself. No GitHub Actions refresh job, no static bearer connection. Validated end to end in TSANet's development environment.
+
+### Step 1 — Register the OAuth client (scope goes in `default_scopes`)
+```bash
+curl -X POST \
+  "https://SUBDOMAIN.zendesk.com/api/services/zis/connections/oauth/clients/tsanet_connect" \
+  -H "Authorization: Bearer ZIS_OAUTH_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "tsanet_entra",
+    "grant_type": "client_credentials",
+    "client_id": "YOUR_ENTRA_CLIENT_ID",
+    "client_secret": "YOUR_ENTRA_CLIENT_SECRET",
+    "token_url": "https://login.microsoftonline.com/TENANT_ID/oauth2/v2.0/token",
+    "default_scopes": "api://AUDIENCE/.default"
+  }'
+```
+
+### Step 2 — Create the connection (no browser / admin-consent step)
+```bash
+curl -X POST \
+  "https://SUBDOMAIN.zendesk.com/api/services/zis/connections/oauth/start/tsanet_connect" \
+  -H "Authorization: Bearer ZIS_OAUTH_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"oauth_client_name": "tsanet_entra", "name": "tsanet_oauth"}'
+```
+The response contains a `redirect_url` with a `verification_code`. **GET that `access_codes` URL (with the ZIS bearer) to complete creation — this step is required even for client_credentials.** The connection then holds a live `access_token` and `token_expiry`; ZIS renews expired tokens automatically by re-running the client-credentials flow.
+
+### Gotchas (each cost real debugging time)
+- **Updating a registered OAuth client is `PATCH`** `/connections/oauth/clients/{integration}/{uuid}` — `PUT` returns 405.
+- **The documented force-refresh endpoint** (`POST /api/services/zis/connections/refresh/{integration}?name=...`) **returns 405** — renewal appears to be use-triggered only.
+- **`AADSTS7000215` (invalid client secret) through ZIS while the same secret works directly** means the stored value is corrupted — re-PATCH the client with the verbatim secret. Watch for editor/paste artifacts (merged lines, trimmed leading punctuation).
+- Show the connection with `GET /api/services/zis/connections/{integration}?name=...` to inspect `token_expiry` and confirm minting worked.
 
 ---
 
