@@ -1,16 +1,14 @@
-# TSANet Connect — ZIS & GitHub Actions Quick Start Guide
+# TSANet Connect — ZIS Quick Start Guide
 
-**Last updated:** May 2026  
-**Time to complete:** ~45 minutes
+**Last updated:** June 2026  
+**Time to complete:** ~20 minutes (Steps 1–4); add ~20 minutes for the optional SLA monitor
 
 This guide covers two things:
 
-1. **Connecting ZIS to the TSANet API** (Step 4) — so ZIS flows can call TSANet without handling auth themselves. There are two ways to do this:
-   - **Option A — OAuth client credentials (Microsoft Entra).** ZIS stores a long-lived client credential and mints/renews short-lived tokens itself. No refresh job, no server. This is the standard method as TSANet rolls it out from development through Beta to Production ([issue #1](https://github.com/tsanetgit/Zendesk/issues/1)).
-   - **Option B — Bearer token + GitHub Actions refresh.** The original method: a static TSANet JWT stored in ZIS, kept alive by a scheduled refresh job (the JWT expires every ~60 minutes). Use this only until Option A is enabled for your environment.
+1. **Connecting ZIS to the TSANet API** (Steps 1–4) — so ZIS flows can call TSANet without handling auth themselves. The method is **OAuth client credentials (Microsoft Entra)**: ZIS stores a long-lived client credential issued by TSANet and mints/renews short-lived tokens itself. Nothing scheduled, no server, no token-refresh automation ([issue #1](https://github.com/tsanetgit/Zendesk/issues/1)).
 2. **SLA Breach Monitor** (Steps 5–8) — **optional.** A GitHub Actions job that checks for overdue TSANet acknowledgments and tags Zendesk tickets, triggering email alerts to assignees. TSANet enforces only one SLA (case creation → initial acknowledgment) and does so server-side regardless — the integration is complete without this. Implement it if you want breach alerting inside Zendesk, or skip it and build something more robust with Zendesk's native SLA policies.
 
-> **Shortest path:** Option A with no SLA alerting requires no GitHub repository, no secrets, and no workflow — Steps 1–4 and you're done.
+> **Shortest path:** if you skip the optional SLA monitor, you need no GitHub repository, no secrets, and no workflow — Steps 1–4 and you're done.
 
 ---
 
@@ -19,10 +17,9 @@ This guide covers two things:
 | Requirement | Notes |
 |---|---|
 | Zendesk Admin access | Needs API token + ZIS integration management |
-| TSANet API credentials | Same API user as the ZAF app (`api@yourcompany.com`) — Option B and the SLA monitor |
-| TSANet-issued Entra client | Option A: client ID + secret from TSANet, plus service principal onboarding (contact TSANet with your SP object ID) |
-| GitHub repository | Only for Option B (token refresh) and/or the optional SLA monitor |
-| `gh` CLI | [Install](https://cli.github.com/) — used to set repository secrets (same scope as above) |
+| TSANet-issued Entra client | Client ID + secret from TSANet, plus service principal onboarding (contact TSANet with your SP object ID) |
+| TSANet API credentials | Same API user as the ZAF app (`api@yourcompany.com`) — only needed for the optional SLA monitor |
+| GitHub repository + `gh` CLI | Only for the optional SLA monitor ([gh install](https://cli.github.com/)) |
 | ZIS OAuth client | Created in Zendesk Admin Center (see Step 2) |
 
 ---
@@ -30,23 +27,16 @@ This guide covers two things:
 ## Architecture Overview
 
 ```
-ZIS ↔ TSANet connection (pick one)
+ZIS ↔ TSANet connection
 │
-├── Option A: OAuth client credentials (standard going forward)
-│     ZIS holds client_id + client_secret (Entra)
-│     ZIS mints/renews short-lived tokens itself
-│     → no refresh job, nothing scheduled
-│
-└── Option B: bearer token + GitHub Actions refresh (legacy)
-      Job 1: refresh-token (every hour at :00 and :50)
-        1. POST /v1/login → TSANet JWT
-        2. POST /oauth/tokens → ZIS OAuth token
-        3. DELETE old ZIS bearer connection
-        4. POST new ZIS bearer connection (fresh JWT)
+└── OAuth client credentials (Entra)
+      ZIS holds client_id + client_secret
+      ZIS mints/renews short-lived tokens itself
+      → nothing scheduled, no refresh automation
 
-GitHub Actions — optional add-on (either option)
+GitHub Actions — optional add-on
 │
-└── Job 2: sla-monitor
+└── sla-monitor
       1. POST /v1/login → TSANet JWT
       2. GET OPEN collaboration requests
       3. For each past-deadline case:
@@ -61,7 +51,7 @@ GitHub Actions — optional add-on (either option)
 
 1. Go to **Admin Center → Apps and integrations → APIs → Zendesk API**
 2. Click **Add API token**
-3. Give it a description: `TSANet GitHub Actions`
+3. Give it a description: `TSANet ZIS`
 4. Copy the token — you won't see it again
 
 ---
@@ -116,11 +106,9 @@ ZIS_TOKEN=$(curl -s -X POST \
   -d '{"token":{"client_id":"YOUR_ZIS_CLIENT_ID","scopes":["read","write"]}}' | jq -r '.token.full_token')
 ```
 
-### Option A — OAuth client credentials (standard going forward)
+Requires the TSANet-issued Entra client (see Prerequisites). ZIS stores the credential and handles all token minting and renewal itself.
 
-Requires the TSANet-issued Entra client (see Prerequisites). ZIS stores the credential and handles all token minting and renewal itself — **skip the refresh-token half of the GitHub Actions workflow entirely.**
-
-**A1. Register the OAuth client** (the API scope goes in `default_scopes`):
+**4a. Register the OAuth client** (the API scope goes in `default_scopes`):
 ```bash
 curl -s -X POST \
   "https://YOURSUBDOMAIN.zendesk.com/api/services/zis/connections/oauth/clients/tsanet_connect" \
@@ -137,7 +125,7 @@ curl -s -X POST \
 ```
 TSANet provides the `TENANT_ID`, `AUDIENCE`, and your client credentials. Paste the secret **verbatim** — Entra secrets can begin with punctuation, and trimming it breaks auth with `AADSTS7000215`.
 
-**A2. Create the connection** (no browser or admin-consent step):
+**4b. Create the connection** (no browser or admin-consent step):
 ```bash
 curl -s -X POST \
   "https://YOURSUBDOMAIN.zendesk.com/api/services/zis/connections/oauth/start/tsanet_connect" \
@@ -147,40 +135,22 @@ curl -s -X POST \
 ```
 The response contains a `redirect_url` with a `verification_code`. **GET that URL (with the same `$ZIS_TOKEN` bearer) to complete creation** — required even for client credentials.
 
-**A3. Verify** — the connection should hold a live `access_token` and a `token_expiry` about an hour out:
+**4c. Verify** — the connection should hold a live `access_token` and a `token_expiry` about an hour out:
 ```bash
 curl -s -H "Authorization: Bearer $ZIS_TOKEN" \
   "https://YOURSUBDOMAIN.zendesk.com/api/services/zis/connections/tsanet_connect?name=tsanet_oauth"
 ```
-ZIS renews the token automatically when it expires. **If you are not implementing the optional SLA monitor, you are finished here.** Steps 5–8 are only needed for Option B's refresh job and/or SLA breach alerting.
+ZIS renews the token automatically when it expires. **If you are not implementing the optional SLA monitor, you are finished here.**
 
 > Gotcha: to change the stored credential later, the endpoint is **`PATCH`** `/api/services/zis/connections/oauth/clients/tsanet_connect/{uuid}` — `PUT` returns 405.
 
-### Option B — Bearer token (legacy; requires the refresh job)
-
-Stores a raw TSANet JWT as a ZIS connection. The JWT expires in ~60 minutes, which is why this option requires the GitHub Actions refresh job in Steps 5–7.
-
-```bash
-# 1. Get a TSANet JWT
-JWT=$(curl -s -X POST "https://connect2.tsanet.org/v1/login" \
-  -H "Content-Type: application/json" \
-  -d '{"username":"api@yourcompany.com","password":"YOUR_TSANET_PASSWORD"}' | jq -r '.accessToken')
-
-# 2. Register it as a bearer connection (use connect2.tsanet.net for Beta)
-curl -s -X POST \
-  "https://YOURSUBDOMAIN.zendesk.com/api/services/zis/connections/bearer_token" \
-  -H "Authorization: Bearer $ZIS_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"name":"tsanet_api","token":"'"$JWT"'","allowed_domain":"connect2.tsanet.org"}'
-```
-
-This connection is now live — for ~60 minutes. Steps 5–7 set up the workflow that keeps it alive.
+> An earlier revision of this guide also documented a legacy bearer-token method (a static TSANet JWT kept alive by a scheduled GitHub Actions refresh job). It has been removed to avoid confusion; if you ever need it, it lives in this file's git history.
 
 ---
 
 ## Step 5 — Set GitHub Repository Secrets
 
-> **Steps 5–8 are conditional.** Required for **Option B** (the token-refresh job). For **Option A** they are entirely optional — implement them only if you want the SLA breach alerting described in the intro.
+> **Steps 5–8 are entirely optional** — they set up the SLA breach alerting described in the intro. Skip them if you don't want it.
 
 In your GitHub repository, add the following secrets via the CLI or the GitHub UI (**Settings → Secrets and variables → Actions**):
 
@@ -190,7 +160,6 @@ gh secret set TSANET_PASSWORD      --body "your-tsanet-api-password"
 gh secret set ZENDESK_SUBDOMAIN    --body "yoursubdomain"
 gh secret set ZENDESK_EMAIL        --body "admin@yourcompany.com"
 gh secret set ZENDESK_API_TOKEN    --body "your-zendesk-api-token"
-gh secret set ZIS_CLIENT_ID        --body "your-zis-oauth-client-id"
 gh secret set ZENDESK_FIELD_ID_TOKEN --body "your-tsanet-token-field-id"
 ```
 
@@ -200,12 +169,10 @@ gh secret set ZENDESK_FIELD_ID_TOKEN --body "your-tsanet-token-field-id"
 
 ## Step 6 — Add the Workflow File
 
-> **On Option A?** Delete (or never add) the `refresh-token` job below — ZIS renews its own tokens. Keep only `sla-monitor`.
-
 Create `.github/workflows/tsanet-maintenance.yml` in your repository:
 
 ```yaml
-name: TSANet Maintenance
+name: TSANet SLA Monitor
 
 on:
   schedule:
@@ -213,68 +180,7 @@ on:
   workflow_dispatch:           # Allow manual trigger
 
 jobs:
-  # ── Job 1: Refresh ZIS Bearer Token ─────────────────────────────────────────
-  refresh-token:
-    name: Refresh ZIS Bearer Token
-    runs-on: ubuntu-latest
-    steps:
-      - name: Get fresh TSANet JWT
-        id: tsanet
-        run: |
-          RESPONSE=$(curl -s -X POST "https://connect2.tsanet.net/v1/login" \
-            -H "Content-Type: application/json" \
-            -d "{\"username\":\"${{ secrets.TSANET_USERNAME }}\",\"password\":\"${{ secrets.TSANET_PASSWORD }}\"}")
-          JWT=$(echo "$RESPONSE" | jq -r '.accessToken')
-          if [ -z "$JWT" ] || [ "$JWT" = "null" ]; then
-            echo "TSANet login failed: $RESPONSE"
-            exit 1
-          fi
-          echo "::add-mask::$JWT"
-          echo "jwt=$JWT" >> $GITHUB_OUTPUT
-          echo "TSANet JWT obtained"
-
-      - name: Get ZIS OAuth token
-        id: zis
-        run: |
-          RESPONSE=$(curl -s -X POST \
-            "https://${{ secrets.ZENDESK_SUBDOMAIN }}.zendesk.com/api/v2/oauth/tokens" \
-            -u "${{ secrets.ZENDESK_EMAIL }}/token:${{ secrets.ZENDESK_API_TOKEN }}" \
-            -H "Content-Type: application/json" \
-            -d "{\"token\":{\"client_id\":\"${{ secrets.ZIS_CLIENT_ID }}\",\"scopes\":[\"read\",\"write\"]}}")
-          ZIS_TOKEN=$(echo "$RESPONSE" | jq -r '.token.full_token')
-          if [ -z "$ZIS_TOKEN" ] || [ "$ZIS_TOKEN" = "null" ]; then
-            echo "ZIS OAuth token failed: $RESPONSE"
-            exit 1
-          fi
-          echo "::add-mask::$ZIS_TOKEN"
-          echo "token=$ZIS_TOKEN" >> $GITHUB_OUTPUT
-          echo "ZIS OAuth token obtained"
-
-      - name: Delete expired ZIS connection
-        run: |
-          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE \
-            "https://${{ secrets.ZENDESK_SUBDOMAIN }}.zendesk.com/api/services/zis/integrations/tsanet_connect/connections/bearer_token/tsanet_api" \
-            -H "Authorization: Bearer ${{ steps.zis.outputs.token }}")
-          if [ "$HTTP_STATUS" != "204" ] && [ "$HTTP_STATUS" != "404" ]; then
-            echo "Unexpected delete response: $HTTP_STATUS"
-            exit 1
-          fi
-          echo "Old connection removed (status $HTTP_STATUS)"
-
-      - name: Install fresh ZIS connection
-        run: |
-          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
-            "https://${{ secrets.ZENDESK_SUBDOMAIN }}.zendesk.com/api/services/zis/integrations/tsanet_connect/connections/bearer_token" \
-            -H "Authorization: Bearer ${{ steps.zis.outputs.token }}" \
-            -H "Content-Type: application/json" \
-            -d "{\"name\":\"tsanet_api\",\"token\":\"${{ steps.tsanet.outputs.jwt }}\",\"allowed_domain\":\"connect2.tsanet.net\"}")
-          if [ "$HTTP_STATUS" != "201" ]; then
-            echo "Failed to create connection: $HTTP_STATUS"
-            exit 1
-          fi
-          echo "Fresh bearer token connection installed"
-
-  # ── Job 2: SLA Breach Monitor ────────────────────────────────────────────────
+  # ── SLA Breach Monitor ───────────────────────────────────────────────────────
   sla-monitor:
     name: SLA Breach Monitor
     runs-on: ubuntu-latest
@@ -347,7 +253,7 @@ jobs:
 
 ```bash
 git add .github/workflows/tsanet-maintenance.yml
-git commit -m "Add TSANet Maintenance workflow (token refresh + SLA monitor)"
+git commit -m "Add TSANet SLA monitor workflow"
 git push
 ```
 
@@ -355,14 +261,14 @@ git push
 
 Then verify:
 1. Go to your repo → **Actions** tab
-2. Find **TSANet Maintenance** → click **Run workflow** to trigger manually
-3. Both jobs should complete green within ~30 seconds
-4. Confirm the ZIS bearer connection is active by calling the ZIS API directly:
+2. Find **TSANet SLA Monitor** → click **Run workflow** to trigger manually
+3. The job should complete green within ~30 seconds
+4. Confirm the ZIS connection is active by calling the ZIS API directly:
    ```bash
    curl -s -u "YOUR_EMAIL/token:YOUR_API_TOKEN" \
      "https://YOURSUBDOMAIN.zendesk.com/api/services/zis/integrations/tsanet_connect/connections"
    ```
-   You should see a `tsanet_api` bearer connection in the response (Option B) or the `tsanet_oauth` connection (Option A). Note: ZIS custom integrations do **not** appear in Admin Center UI (Apps and integrations → Integrations) — that page only shows marketplace integrations. The API is the only way to verify.
+   You should see the `tsanet_oauth` connection in the response. Note: ZIS custom integrations do **not** appear in Admin Center UI (Apps and integrations → Integrations) — that page only shows marketplace integrations. The API is the only way to verify.
 
 ---
 
@@ -387,18 +293,11 @@ This fires exactly once per breach (the tag is only added once — subsequent ru
 ```
 TSANet API                    Zendesk
 ──────────────────────────    ─────────────────────────────────────
-Option A:
 Entra tokens (~60 min)   ←── ZIS OAuth connection "tsanet_oauth"
                               mints and renews tokens itself —
                               nothing scheduled, no refresh job
 
-Option B:
-JWT (expires ~60 min)    ←── GitHub Actions refresh-token job
-                              (runs at :00 and :50 every hour)
-                              Registers fresh JWT as ZIS bearer
-                              connection named "tsanet_api"
-
-Optional (both options):
+Optional:
 OPEN cases list          ←── GitHub Actions sla-monitor job
                               (runs at :00 and :50 every hour)
                               Finds overdue cases → tags tickets
@@ -411,25 +310,22 @@ OPEN cases list          ←── GitHub Actions sla-monitor job
 
 | Symptom | Fix |
 |---|---|
-| `refresh-token` job fails at "Get ZIS OAuth token" | Verify `ZIS_CLIENT_ID` secret matches the OAuth client ID in Admin Center |
-| `refresh-token` job fails at "Install fresh ZIS connection" with 409 | The DELETE step likely returned an unexpected status — check logs for HTTP code |
 | `sla-monitor` job finds no tickets for breached cases | Check that `ZENDESK_FIELD_ID_TOKEN` matches the TSANet Token field ID used by the ZAF app |
 | Trigger fires repeatedly for same ticket | Confirm the trigger condition uses `current_tags` (not `tags`) — wrong field name causes the check to fail silently |
 | `gh auth refresh -s workflow` required | GitHub OAuth token was issued without the `workflow` scope — this is a one-time fix |
-| ZIS connection shows as `allowed_domain: connect2.tsanet.net` but using production | Update the workflow and re-run — the connection `allowed_domain` must match the API host |
-| Option A: ZIS reports `AADSTS7000215` (invalid client secret) but the same secret works elsewhere | The stored value is corrupted (paste artifact, trimmed leading punctuation) — re-send it verbatim via `PATCH /api/services/zis/connections/oauth/clients/tsanet_connect/{uuid}` |
-| Option A: updating the OAuth client returns 405 | Use `PATCH`, not `PUT`, on the client endpoint |
-| Option A: connection created but no `access_token` | The `verification_code` exchange step was skipped — GET the `redirect_url` from the start response with the ZIS bearer |
+| ZIS reports `AADSTS7000215` (invalid client secret) but the same secret works elsewhere | The stored value is corrupted (paste artifact, trimmed leading punctuation) — re-send it verbatim via `PATCH /api/services/zis/connections/oauth/clients/tsanet_connect/{uuid}` |
+| Updating the OAuth client returns 405 | Use `PATCH`, not `PUT`, on the client endpoint |
+| Connection created but no `access_token` | The `verification_code` exchange step was skipped — GET the `redirect_url` from the start response with the ZIS bearer |
 
 ---
 
 ## Key Concepts
 
-**Why refresh the ZIS token?**  
-TSANet JWTs expire in ~60 minutes. ZIS stores the connection credentials internally, so each ZIS flow that calls the TSANet API gets a valid token automatically — without any ZIS flow needing to handle authentication logic itself.
+**How does ZIS authenticate to TSANet?**  
+The ZIS OAuth connection stores your TSANet-issued Entra client credential and exchanges it for short-lived access tokens via the client credentials grant. ZIS renews expired tokens automatically, so every ZIS flow that calls the TSANet API gets a valid token without handling any authentication logic itself.
 
-**Why GitHub Actions and not ZIS flows?**  
-ZIS flows are event-driven (triggered by Zendesk events like ticket updates). Neither the token refresh nor the SLA poll fits that model — both need to run on a time schedule regardless of ticket activity. GitHub Actions scheduled workflows are the simplest and most reliable mechanism for this.
+**Why GitHub Actions for the SLA monitor and not ZIS flows?**  
+ZIS flows are event-driven (triggered by Zendesk events like ticket updates). The SLA poll doesn't fit that model — it needs to run on a time schedule regardless of ticket activity. GitHub Actions scheduled workflows are the simplest and most reliable mechanism for this.
 
 **Why is the SLA scope only OPEN cases?**  
 TSANet SLA is acknowledgment-only. Once a case is Accepted, Rejected, or Info Requested (`responded: true`), TSANet stops tracking it. Checking ACCEPTED/CLOSED cases for SLA breaches would produce false positives.
