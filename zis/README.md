@@ -65,6 +65,25 @@ curl -X POST "https://YOURSUBDOMAIN.zendesk.com/api/services/zis/registry/job_sp
 
 The webhook subscription on the TSANet side (callbackUrl = the ingest URL, with its Basic credentials) requires the `callbackAuth` capability tracked in issue #2. Until then, the pipeline can be exercised by POSTing a `WebhookPayload`-shaped body (`eventType`, `requestToken`, `timestamp`) to the ingest URL with the Basic credentials.
 
+## Field-driven case actions (no ZAF app required)
+
+The bundle also includes `flow_field_action` + `jobspec_field_action` (issue #22): the full inbound lifecycle — Accept, Reject, Request Info, Add Note — driven entirely by native Zendesk controls. An agent (or a macro) sets the **TSANet Action** dropdown; a ZIS flow executes the action against the TSANet API and clears the field. No private app needed.
+
+### Additional setup
+
+1. Create two more custom ticket fields and substitute their IDs in the bundle (alongside the other field IDs):
+   - **TSANet Action** — dropdown with options `Accept` (tag `tsanet_action_accept`), `Reject` (`tsanet_action_reject`), `Request Info` (`tsanet_action_request_info`), `Add Note` (`tsanet_action_add_note`)
+   - **TSANet Action Text** — text; holds the reject reason / info question / note body
+2. Substitute `YOUR_TSANET_API_EMAIL` in `action_ts_accept` with your TSANet API user email (TSANet's Accept endpoint requires an `engineerEmail` from your registered domain — agent emails fail validation).
+3. The job spec `jobspec_field_action` subscribes to `support` / `ticket.CustomFieldChanged` — install it like the others (and reinstall after every bundle upload).
+4. Optional but recommended: four macros ("TSANet: Accept", ...) that set the Action (and prompt for Action Text where relevant) for one-click agent UX.
+
+### Behavior
+
+- **Success:** internal comment + TSANet Status updated + Action field cleared. Exception: **Add Note succeeds silently** — the note mirror is the receipt (prevents double comments).
+- **Failure** (wrong case state, missing text, no token): internal comment explaining, Action cleared, Status untouched. Details land in the Integration Log.
+- **Guards:** the flow no-ops unless the changed field is TSANet Action with a non-empty action value — so the flow's own clears, status syncs, and any ZAF field writes never re-trigger it. Safe to run alongside the ZAF app (the two action paths are independent; see issue #22 for the coexistence analysis).
+
 ## Gotchas (each cost real debugging time — full record in issue #18)
 
 - **Reinstall job specs after every bundle upload.** Uploads orphan existing installs; the flow silently stops firing.
