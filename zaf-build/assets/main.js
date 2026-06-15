@@ -675,8 +675,20 @@ function handleSubmit() {
         if (existing.indexOf(created.token) === -1) existing.push(created.token);
         return writeFields(ticketId, [
           { id: settings.field_id_token,        value: created.token },
-          { id: settings.field_id_tokens_multi, value: JSON.stringify(existing) }
+          { id: settings.field_id_tokens_multi, value: JSON.stringify(existing) },
+          { id: settings.field_id_status,       value: 'tsanet_status_open' }
         ]).then(function() {
+          // Tag the originating ticket so outbound cases are filterable in a View
+          // (mirrors the tsanet_inbound tag set on inbound ticket creation). POST is
+          // additive; never PUT here, which would replace and wipe the support
+          // ticket's own existing tags.
+          return client.request({
+            url: '/api/v2/tickets/' + ticketId + '/tags.json',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ tags: ['tsanet_outbound'] })
+          });
+        }).then(function() {
           document.getElementById('new-collab-dialog').style.display = 'none';
           showSuccess('Collaboration request submitted!');
           return loadCollaborations();
