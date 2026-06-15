@@ -511,6 +511,11 @@ document.getElementById('modal-cancel').addEventListener('click', function() {
 
 document.getElementById('btn-sync-inbound').addEventListener('click', syncInboundCases);
 
+// Compact-bar "+ New" (shown on no-token tickets). Wired here, not via an inline
+// onclick attribute — inline event handlers are blocked by the ZAF iframe CSP and
+// silently do nothing. enterNewCollaboration is a hoisted function declaration below.
+document.getElementById('btn-compact-new').addEventListener('click', enterNewCollaboration);
+
 document.getElementById('btn-new-collab').addEventListener('click', function() {
   var d = document.getElementById('new-collab-dialog');
   d.style.display = d.style.display === 'none' ? 'block' : 'none';
