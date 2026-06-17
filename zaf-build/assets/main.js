@@ -577,6 +577,13 @@ function selectPartner(partner, itemEl) {
   for (var i = 0; i < items.length; i++) items[i].classList.remove('selected');
   itemEl.classList.add('selected');
   selectedPartner = partner;
+  // Commit the selection in the UI: reflect the chosen partner in the search box
+  // and close the results dropdown. Without this the list stays open over the
+  // form and the input never updates, so the selection gives no visible
+  // confirmation — and each re-click re-runs this handler and wipes the form
+  // (form.innerHTML = '' below), which reads as the form "resetting".
+  document.getElementById('partner-search-input').value = partner.label || partner.companyName || '';
+  document.getElementById('partner-results').innerHTML = '';
   var form = document.getElementById('collab-form');
   form.style.display = 'none'; form.innerHTML = '';
   var url = partner.departmentId
