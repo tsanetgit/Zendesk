@@ -658,9 +658,9 @@ function handleSubmit() {
     return Object.assign({}, f, { value: el ? el.value : '' });
   });
 
-  client.get(['ticket.id', 'ticket.requester']).then(function(d) {
-    var ticketId  = d['ticket.id'];
-    var requester = d['ticket.requester'] || {};
+  client.get(['ticket.id', 'currentUser']).then(function(d) {
+    var ticketId = d['ticket.id'];
+    var agent    = d['currentUser'] || {};
     var payload = {
       documentId:              currentForm && currentForm.documentId,
       internalCaseNumber:      String(ticketId),
@@ -668,9 +668,13 @@ function handleSubmit() {
       problemDescription:      description,
       priority:                priority,
       testSubmission:          (settings.tsanet_env || 'BETA') === 'BETA',
+      // submitterContactDetails is the submitting agent, not the ticket requester
+      // (the customer). TSANet validates this email against the member's registered
+      // domain, so the customer's address is rejected. settings.tsanet_username is
+      // always domain-valid — same rule and fix as handleAccept's engineerEmail.
       submitterContactDetails: {
-        name:  requester.name  || '',
-        email: requester.email || ''
+        name:  agent.name || '',
+        email: settings.tsanet_username
       },
       customFields: customFields
     };
