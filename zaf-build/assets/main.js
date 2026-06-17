@@ -36,6 +36,17 @@ if (typeof ZAFClient === 'undefined') {
       loadCollaborations();
       client.on('ticket.tags.changed', loadCollaborations);
 
+      // Partner-side updates (accept/reject, notes) reach Zendesk with no inbound
+      // webhook, so refresh the panel on an interval. Quiet (no loading flash) and
+      // guarded: skip while the agent is mid-interaction (New Collaboration dialog
+      // or a modal open) so a refresh never wipes in-progress input.
+      setInterval(function() {
+        var dialogOpen = document.getElementById('new-collab-dialog').style.display === 'block';
+        var modalOpen  = document.getElementById('tsanet-modal').style.display === 'block';
+        if (dialogOpen || modalOpen) return;
+        loadCollaborations(true);
+      }, 60000);
+
     }).catch(function(err) {
       show('loading', false);
       showError('Could not load app settings: ' + (err.message || String(err)));
@@ -141,8 +152,8 @@ function writeFields(ticketId, fields) {
 }
 
 // ── Load collaborations ───────────────────────────────────────────────────────
-function loadCollaborations() {
-  show('loading', true);
+function loadCollaborations(quiet) {
+  if (!quiet) show('loading', true);
   hideInfoBanner();
 
   return getTokens().then(function(tokens) {
@@ -411,6 +422,10 @@ function syncInboundCases() {
   var btn = document.getElementById('btn-sync-inbound');
   btn.disabled = true;
   btn.textContent = 'Syncing...';
+
+  // Refresh the case currently in view too — clicking sync should pull the latest
+  // notes/status for what the agent is looking at, not only scan for new inbound.
+  loadCollaborations();
 
   tsanetGet('/collaboration-requests?type=INBOUND').then(function(cases) {
     var open = (cases || []).filter(function(c) {
