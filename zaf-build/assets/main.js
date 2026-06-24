@@ -1,5 +1,7 @@
 /**
- * TSANet Connect ZAF App — v1.0.40
+ * TSANet Connect ZAF App — v1.0.41
+ * Public Add Note: post the public comment only; #35 forwards it (no explicit
+ * /notes) so the partner gets it once, not twice (issue #38).
  * client.metadata() with .then() chains after app.registered
  * Includes: New Collaboration, Sync Inbound Cases, action buttons,
  * forwarded-reply echo suppression in syncNotesToZendesk (issue #34),
@@ -877,13 +879,12 @@ function handleAddNote(token) {
   showPrompt2('Add a note:', 'Subject', 'Details', function(subject, details, isPublic) {
     if (!subject) return;
     if (isPublic) {
-      // Public: send to the partner (TSANet) AND post a public Zendesk reply the
-      // end customer sees. The note mirror suppresses the echo (self-authored +
-      // matches this public comment, issue #34).
-      var body = { summary: subject };
-      if (details) body.description = details;
-      tsanetPost('/collaboration-requests/' + token + '/notes', body)
-        .then(function() { return postNoteComment(subject, details, true); })
+      // Public: post a public Zendesk reply only. The #35 trigger forwards it to
+      // the partner as a single TSANet note (fires on inbound + outbound). No
+      // explicit /notes here — doing both double-sent to the partner (issue #38).
+      // The note mirror suppresses the internal echo (self-authored + matches this
+      // public comment, issue #34).
+      postNoteComment(subject, details, true)
         .then(function() { showSuccess('Note added (public).'); loadCollaborations(); })
         .catch(function(e) { showError('Note failed: ' + e.message); });
     } else {
