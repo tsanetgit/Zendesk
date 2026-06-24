@@ -1,9 +1,10 @@
 /**
- * TSANet Connect ZAF App — v1.0.39
+ * TSANet Connect ZAF App — v1.0.40
  * client.metadata() with .then() chains after app.registered
  * Includes: New Collaboration, Sync Inbound Cases, action buttons,
  * forwarded-reply echo suppression in syncNotesToZendesk (issue #34),
- * per-note public/internal toggle in Add Note
+ * per-note public/internal toggle in Add Note — internal notes stay in
+ * Zendesk only (never propagated to TSANet)
  */
 (function() {
 'use strict';
@@ -875,25 +876,29 @@ function handleClose(token) {
 function handleAddNote(token) {
   showPrompt2('Add a note:', 'Subject', 'Details', function(subject, details, isPublic) {
     if (!subject) return;
-    var body = { summary: subject };
-    if (details) body.description = details;
-    tsanetPost('/collaboration-requests/' + token + '/notes', body)
-      .then(function() {
-        // The note always reaches the partner (TSANet). If the agent marked it
-        // public, also post it as a public Zendesk reply so the end customer sees
-        // it. The note mirror (syncNotesToZendesk) suppresses the echo because the
-        // note is self-authored and now matches this public comment.
-        if (isPublic) return postPublicNoteComment(subject, details);
-      })
-      .then(function() { showSuccess(isPublic ? 'Note added (public).' : 'Note added.'); loadCollaborations(); })
-      .catch(function(e) { showError('Note failed: ' + e.message); });
+    if (isPublic) {
+      // Public: send to the partner (TSANet) AND post a public Zendesk reply the
+      // end customer sees. The note mirror suppresses the echo (self-authored +
+      // matches this public comment, issue #34).
+      var body = { summary: subject };
+      if (details) body.description = details;
+      tsanetPost('/collaboration-requests/' + token + '/notes', body)
+        .then(function() { return postNoteComment(subject, details, true); })
+        .then(function() { showSuccess('Note added (public).'); loadCollaborations(); })
+        .catch(function(e) { showError('Note failed: ' + e.message); });
+    } else {
+      // Internal: stays in Zendesk only — NOT propagated to the TSANet webapp.
+      postNoteComment(subject, details, false)
+        .then(function() { showSuccess('Internal note added.'); })
+        .catch(function(e) { showError('Note failed: ' + e.message); });
+    }
   });
 }
 
-// Post a note's text as a PUBLIC Zendesk comment (visible to the end customer).
-// No tsanet-note-id marker: the mirror's self-authored + public-comment-match
-// suppression (issue #34) handles dedup, keeping the customer-facing comment clean.
-function postPublicNoteComment(subject, details) {
+// Write a note's text as a Zendesk comment — public (visible to the end customer)
+// or internal (agent-only). Public notes carry no tsanet-note-id marker; the
+// mirror's self-authored + public-comment-match suppression (issue #34) dedups them.
+function postNoteComment(subject, details, isPublic) {
   return getTicketId().then(function(ticketId) {
     var body = subject;
     if (details && details !== subject) body += '\n\n' + details;
@@ -901,7 +906,7 @@ function postPublicNoteComment(subject, details) {
       url: '/api/v2/tickets/' + ticketId + '.json',
       type: 'PUT',
       contentType: 'application/json',
-      data: JSON.stringify({ ticket: { comment: { body: body, public: true } } })
+      data: JSON.stringify({ ticket: { comment: { body: body, public: isPublic } } })
     });
   });
 }
