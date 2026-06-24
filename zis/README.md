@@ -43,10 +43,11 @@ TSANet webhook ping (eventType + requestToken)
 | Custom field IDs | `action_create_ticket`, `action_search_ticket`, `action_update_ticket` | Replace the three numeric IDs (TSANet Token / Status / Partner, plus Respond By in the update action) with **your** instance's field IDs |
 | API host | **all five** TSANet API actions — `action_get_collaboration`, `action_ts_accept`, `action_ts_reject`, `action_ts_info`, `action_ts_note` | File ships with Production (`connect2.tsanet.org`); use `connect2.tsanet.net` for Beta. The host appears in every action that calls the TSANet API, not just `action_get_collaboration` — substitute all five or the lifecycle actions will hit the wrong environment |
 | `engineerEmail` | `action_ts_accept` | Replace `YOUR_TSANET_API_EMAIL` with your TSANet API user email. It **must** be on your member-registered domain — TSANet's Accept endpoint rejects emails from any other domain. See *Field-driven case actions* below |
+| OAuth connection name | **all five** TSANet API actions (the same five as API host) | File ships with `tsanet_oauth`. If your instance named its OAuth connection differently (e.g. `tsanet_beta_oauth`), substitute it in **all five** actions, or every TSANet call fails auth against a nonexistent connection. Symptom: ingest accepts (HTTP 200) but the flow's `action_ts_*` silently no-op via their `Catch`. Verify the live name with `GET /api/services/zis/connections/{integration}?name=<name>` |
 
-Connection names (`tsanet_oauth`, `zendesk`) match the Quick Start and need no change if you followed it.
+Connection name `zendesk` (basic-auth, Zendesk-side actions) matches the Quick Start. The OAuth connection name is per-instance — see the row above.
 
-> Validated end-to-end on Beta (`connect2.tsanet.net`): authenticated webhook deliveries return 200 and the flow creates Zendesk tickets. The three substitutions above (field IDs, host, `engineerEmail`) are the complete per-instance set — nothing else is environment-specific.
+> Validated end-to-end on Beta (`connect2.tsanet.net`): authenticated webhook deliveries return 200 and the flow creates Zendesk tickets. The per-instance set is field IDs, host, `engineerEmail`, **and the OAuth connection name** — nothing else is environment-specific.
 
 ## Deploy
 

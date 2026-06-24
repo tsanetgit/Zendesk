@@ -1,7 +1,8 @@
 /**
- * TSANet Connect ZAF App — v1.0.31
+ * TSANet Connect ZAF App — v1.0.38
  * client.metadata() with .then() chains after app.registered
- * Includes: New Collaboration, Sync Inbound Cases, action buttons
+ * Includes: New Collaboration, Sync Inbound Cases, action buttons,
+ * forwarded-reply echo suppression in syncNotesToZendesk (issue #34)
  */
 (function() {
 'use strict';
@@ -312,12 +313,12 @@ function renderCard(collab) {
   notesContainer.className = 'notes-container';
   notesContainer.innerHTML = '<div class="notes-loading">Loading notes...</div>';
   card.appendChild(notesContainer);
-  loadNotes(collab.token, notesContainer);
+  loadNotes(collab.token, notesContainer, isInbound ? collab.receiveCompanyName : collab.submitCompanyName);
 
   return card;
 }
 
-function loadNotes(token, container) {
+function loadNotes(token, container, ourCompany) {
   tsanetGet('/collaboration-requests/' + token + '/notes').then(function(notes) {
     if (!notes || !notes.length) {
       container.innerHTML = '<div class="notes-empty">No notes yet.</div>';
@@ -336,7 +337,7 @@ function loadNotes(token, container) {
     });
     container.innerHTML = html;
     // Mirror any new TSANet notes to Zendesk ticket as internal comments
-    syncNotesToZendesk(notes);
+    syncNotesToZendesk(notes, ourCompany);
   }).catch(function() {
     container.innerHTML = '';
   });
@@ -345,8 +346,23 @@ function loadNotes(token, container) {
 // ── Sync TSANet notes → Zendesk internal comments ─────────────────────────────
 // Fetches existing ticket comments, finds TSANet notes not yet posted (by marker),
 // and adds them as internal notes so agents can see them without opening ZAF.
-function syncNotesToZendesk(notes) {
+// Echo suppression (issue #34): a public agent reply is forwarded to TSANet as a
+// note by the ZIS flow_forward_comment flow. That note would otherwise mirror back
+// here as an internal "[TSANet Note]" comment — a redundant echo of a reply already
+// visible in the thread. So we skip a note when it is BOTH self-authored
+// (companyName === our member company) AND its text matches an existing PUBLIC
+// comment. Gating on self-authored is what prevents data loss: a genuine partner
+// note that happens to equal an earlier public comment ("Any update?") is never
+// dropped. Notes added via the Add Note action have no matching public comment and
+// still mirror as before.
+function syncNotesToZendesk(notes, ourCompany) {
   if (!notes || !notes.length) return;
+
+  // Normalize text so a TSANet note (HTML-wrapped) compares equal to the plain
+  // Zendesk comment body it was forwarded from.
+  function normForMatch(s) {
+    return stripHtml(s || '').replace(/\s+/g, ' ').trim().toLowerCase();
+  }
 
   getTicketId().then(function(ticketId) {
     // Fetch existing comments to check which notes are already synced
@@ -354,14 +370,28 @@ function syncNotesToZendesk(notes) {
       url: '/api/v2/tickets/' + ticketId + '/comments.json?per_page=100',
       type: 'GET'
     }).then(function(data) {
-      var existingBodies = (data.comments || []).map(function(c) {
+      var comments = data.comments || [];
+      var existingBodies = comments.map(function(c) {
         return c.plain_body || '';
       });
+      // Public comment bodies — a note matching one is a forwarded-reply echo (#34).
+      var publicBodies = comments
+        .filter(function(c) { return c.public; })
+        .map(function(c) { return normForMatch(c.plain_body); })
+        .filter(Boolean);
 
-      // Filter to only notes not yet in Zendesk
+      // Filter to only notes not yet in Zendesk, and not echoes of forwarded replies
       var unsyncedNotes = notes.filter(function(note) {
         var marker = 'tsanet-note-id:' + note.id;
-        return !existingBodies.some(function(body) { return body.indexOf(marker) !== -1; });
+        if (existingBodies.some(function(body) { return body.indexOf(marker) !== -1; })) return false;
+        // Suppress only OUR OWN forwarded replies (self-authored + matches a public
+        // comment). Partner notes are never suppressed, even on a text collision.
+        var selfAuthored = ourCompany && note.companyName === ourCompany;
+        if (selfAuthored) {
+          var noteText = normForMatch(note.summary);
+          if (noteText && publicBodies.indexOf(noteText) !== -1) return false;
+        }
+        return true;
       });
 
       if (!unsyncedNotes.length) return;

@@ -637,6 +637,101 @@
         "event_type": "ticket.CustomFieldChanged",
         "flow_name": "zis:tsanet_connect:flow:flow_field_action"
       }
+    },
+    "flow_forward_comment": {
+      "type": "ZIS::Flow",
+      "properties": {
+        "name": "flow_forward_comment",
+        "definition": {
+          "StartAt": "GuardToken",
+          "States": {
+            "GuardToken": {
+              "Type": "Choice",
+              "Choices": [
+                {
+                  "Variable": "$.input.token",
+                  "StringEquals": "",
+                  "Next": "NoOp"
+                }
+              ],
+              "Default": "GuardComment"
+            },
+            "GuardComment": {
+              "Type": "Choice",
+              "Choices": [
+                {
+                  "Variable": "$.input.comment",
+                  "StringEquals": "",
+                  "Next": "NoOp"
+                }
+              ],
+              "Default": "GuardAuthor"
+            },
+            "GuardAuthor": {
+              "Type": "Choice",
+              "Choices": [
+                {
+                  "Variable": "$.input.author_role",
+                  "StringEquals": "Agent",
+                  "Next": "ForwardNote"
+                },
+                {
+                  "Variable": "$.input.author_role",
+                  "StringEquals": "Admin",
+                  "Next": "ForwardNote"
+                },
+                {
+                  "Variable": "$.input.author_role",
+                  "StringEquals": "Administrator",
+                  "Next": "ForwardNote"
+                },
+                {
+                  "Variable": "$.input.author_role",
+                  "StringEquals": "agent",
+                  "Next": "ForwardNote"
+                },
+                {
+                  "Variable": "$.input.author_role",
+                  "StringEquals": "admin",
+                  "Next": "ForwardNote"
+                }
+              ],
+              "Default": "NoOp"
+            },
+            "NoOp": {
+              "Type": "Succeed"
+            },
+            "ForwardNote": {
+              "Type": "Action",
+              "ActionName": "zis:tsanet_connect:action:action_ts_note",
+              "Parameters": {
+                "token.$": "$.input.token",
+                "text.$": "$.input.comment"
+              },
+              "ResultPath": "$.ts",
+              "End": true,
+              "Catch": [
+                {
+                  "ErrorEquals": [
+                    "States.ALL"
+                  ],
+                  "ResultPath": "$.err",
+                  "Next": "NoOp"
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    "jobspec_forward_comment": {
+      "type": "ZIS::JobSpec",
+      "properties": {
+        "name": "jobspec_forward_comment",
+        "event_source": "zendesk",
+        "event_type": "public_comment",
+        "flow_name": "zis:tsanet_connect:flow:flow_forward_comment"
+      }
     }
   }
 }
