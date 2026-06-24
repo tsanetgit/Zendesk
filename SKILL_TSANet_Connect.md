@@ -42,7 +42,7 @@ A complete TSANet Connect + Zendesk integration has three layers:
 ```
 
 **What ZIS flows are NOT used for:**
-ZIS scheduled polling (`flow_poll_tsanet`) is architecturally broken — ZIS flows cannot call ZIS management endpoints (circular OAuth scope), and ZIS cannot receive TSANet push notifications (TSANet sends no `Authorization` header on webhooks). GitHub Actions is the only viable server-side scheduler. Do not attempt to build ZIS-based polling or ZIS-based token refresh flows.
+ZIS scheduled polling (`flow_poll_tsanet`) is architecturally broken — ZIS flows cannot call ZIS management endpoints (circular OAuth scope). What is retired is ZIS-based token *refresh*, replaced by the OAuth client-credentials connection (see ZIS section). ZIS now CAN receive an inbound TSANet push via a generic inbound webhook secured by the `callbackAuth` capability (API v3.1.0); previously this was blocked because TSANet sent no `Authorization` header on webhooks. GitHub Actions remains the server-side scheduler for polling. Do not attempt to rebuild ZIS-based polling or ZIS-based token refresh flows.
 
 ---
 
@@ -69,8 +69,8 @@ Authorization: Bearer <accessToken>
 
 > **Verify identity after login:** always call `GET /v1/me` during development to confirm credentials and capture `companyId`. The `company.domain` field is important — see Accept bug below.
 
-### Authentication — OAuth 2.0 client credentials (Microsoft Entra, rolling out)
-A second auth scheme is being rolled out for server-to-server integrations and has been validated in TSANet's development environment (tracked in issue #1):
+### Authentication — OAuth 2.0 client credentials (Microsoft Entra, live / default)
+This is now the **live, default** auth scheme for server-to-server integrations, validated in TSANet's development environment (tracked in issue #1). Inbound webhook delivery (TSANet -> ZIS) uses the `callbackAuth` capability, delivered in API v3.1.0 and validated on Beta.
 
 - Obtain a token from Microsoft Entra via the **client credentials** grant: `POST https://login.microsoftonline.com/{tenant-id}/oauth2/v2.0/token` with `grant_type=client_credentials`, your TSANet-issued `client_id`/`client_secret`, and `scope=api://{audience}/.default` (TSANet provides the audience value). Pass the result as a Bearer token.
 - **Service principal provisioning is required.** The API accepts an app-only token only if your service principal's object ID has been provisioned by TSANet; provisioning is also what maps your tokens to your member company. Contact TSANet with your service principal OID to be onboarded.
@@ -122,6 +122,8 @@ GET /v2/collaboration-requests/list?type=INBOUND&updatedAfter=2026-01-01T00:00:0
 ```
 
 ### Notes API — Critical Behavior
+> For when a note reaches the partner vs. stays internal, see **Inbound Comment Forwarding & Note Visibility** (public/internal model).
+
 - `summary` is **required**, max 500 chars
 - `description` is optional, max 5,000 chars
 - **IMPORTANT:** The TSANet web UI always renders both `summary` AND `description` as separate labeled sections. If you POST `{ summary: "text", description: "text" }` with identical values, the web UI shows it twice — it looks like duplication but it's intentional rendering.
@@ -487,6 +489,36 @@ function syncNotesToZendesk(notes, ticketId) {
 
 Call `syncNotesToZendesk(notes, ticketId)` every time you load the notes list for a ticket.
 
+## Inbound Comment Forwarding & Note Visibility (issues #34, #36, #38)
+
+**Rule: only public content reaches the partner; internal notes stay in Zendesk.**
+
+### Forwarding a public reply to the partner
+When an agent posts a **public reply** on a TSANet ticket, a Zendesk trigger forwards it to the partner as a TSANet note. Internal comments are never forwarded.
+
+```
+Agent PUBLIC reply on a TSANet ticket (inbound or outbound)
+  -> Zendesk trigger (comment is public AND tag tsanet_inbound OR tsanet_outbound)
+  -> Zendesk webhook (Basic auth)
+  -> ZIS inbound webhook (source_system "zendesk", event_type "public_comment")
+  -> jobspec_forward_comment -> flow_forward_comment
+        GuardToken -> GuardComment -> GuardAuthor (agent/admin only)
+        ForwardNote -> action_ts_note -> POST /collaboration-requests/{token}/notes
+```
+
+- **Fail-closed author guard.** The flow forwards only when `author_role` (sent by the trigger as `{{current_user.role}}`) is `Agent`/`Admin`. An **End-user** public reply never forwards. **Gotcha:** `{{current_user.role}}` renders the literal **`Admin`** (not `Administrator`); ZIS `Choice` supports only `StringEquals`, so list each accepted value explicitly (`Agent`, `Admin`, plus lowercase variants).
+- **Loop-safe.** The note mirror writes *internal* comments, which never re-fire this *public*-comment trigger.
+
+### Add Note: public vs internal (ZAF)
+The ZAF **Add Note** dialog has a **Public / Internal** toggle:
+- **Internal** (default) -> an internal Zendesk comment only. **Never** POSTed to TSANet.
+- **Public** -> posts **only** a public Zendesk comment; the forwarding trigger above delivers it to the partner.
+
+**Single-path rule (issue #38):** a public Add Note must **not** also `POST /notes` itself — doing both makes the partner receive the note twice (the explicit POST plus the trigger re-forwarding the public comment). Post the public comment and let the trigger forward it.
+
+### Echo suppression in the note mirror
+`syncNotesToZendesk` mirrors partner notes into Zendesk as internal comments. It **skips** a note that is *self-authored* (`companyName` === your member company) **and** matches an existing public comment — so a forwarded public reply doesn't bounce back as a redundant internal `[TSANet Note]`. Partner notes are never suppressed, even on a text collision.
+
 ### SLA Countdown Display
 ```javascript
 function slaDisplay(respondBy) {
@@ -519,6 +551,8 @@ zip -r your-app-v1.0.0.zip manifest.json assets/ translations/ -x "*.DS_Store"
 ---
 
 ## ZIS Bearer Token Setup
+
+> **LEGACY — superseded.** This static-bearer method is retained for reference only. The current method is the OAuth client-credentials (Microsoft Entra) connection documented under **ZIS OAuth Client-Credentials Connection** below; use that for all new work.
 
 > **This pattern is being superseded.** The static bearer-token connection (and the GitHub Actions refresh job that keeps it alive) is the workaround for the TSANet JWT's 60-minute expiry. The replacement — a ZIS **OAuth client-credentials connection** that mints and renews Entra tokens itself — has been validated and is documented below ("ZIS OAuth Client-Credentials Connection"). Use the bearer pattern for Beta/Production until the Entra scheme is generally available; use the OAuth pattern for new work once your service principal is provisioned.
 
@@ -587,6 +621,7 @@ The response contains a `redirect_url` with a `verification_code`. **GET that `a
 - **The documented force-refresh endpoint** (`POST /api/services/zis/connections/refresh/{integration}?name=...`) **returns 405** — renewal appears to be use-triggered only.
 - **`AADSTS7000215` (invalid client secret) through ZIS while the same secret works directly** means the stored value is corrupted — re-PATCH the client with the verbatim secret. Watch for editor/paste artifacts (merged lines, trimmed leading punctuation).
 - Show the connection with `GET /api/services/zis/connections/{integration}?name=...` to inspect `token_expiry` and confirm minting worked.
+- **The connection NAME is per-instance.** Substitute your instance's connection name in **all five** TSANet API actions (`action_ts_*`) when deploying the bundle. An incomplete substitution makes ingest still return 200 while the `action_ts_*` calls silently no-op — nothing reaches TSANet.
 
 ---
 
@@ -606,6 +641,8 @@ Two jobs in one workflow file. Run at :00 and :50 every hour.
 | `ZENDESK_FIELD_ID_TOKEN` | Field ID of the TSANet Token custom field |
 
 ### Job 1: refresh-token
+> **Legacy:** this job is only needed for the static-bearer method. It is not used with the OAuth client-credentials (Entra) ZIS connection, which renews its own tokens.
+
 1. `POST /v1/login` → get fresh TSANet JWT
 2. `POST /oauth/tokens` (Zendesk) → get ZIS OAuth token using ZIS Client ID
 3. `DELETE` old ZIS bearer connection `tsanet_api` (204 or 404 = both OK)
