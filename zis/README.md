@@ -14,7 +14,7 @@ zis/
 
 ```
 TSANet webhook ping (eventType + requestToken)
-  → ZIS inbound webhook (Basic auth)            … requires callbackAuth (issue #2)
+  → ZIS inbound webhook (Basic auth)            … via callbackAuth (issue #2, in API v3.1.0)
   → jobspec_handle_ping → flow_handle_ping
       GetCollaboration   pull full case from TSANet API   (OAuth connection "tsanet_oauth")
       SearchTicket       find ticket by TSANet Token field (connection "zendesk")
@@ -41,9 +41,12 @@ TSANet webhook ping (eventType + requestToken)
 | What | Where | Note |
 |---|---|---|
 | Custom field IDs | `action_create_ticket`, `action_search_ticket`, `action_update_ticket` | Replace the three numeric IDs (TSANet Token / Status / Partner, plus Respond By in the update action) with **your** instance's field IDs |
-| API host | `action_get_collaboration.url` | File ships with Production (`connect2.tsanet.org`); use `connect2.tsanet.net` for Beta |
+| API host | **all five** TSANet API actions — `action_get_collaboration`, `action_ts_accept`, `action_ts_reject`, `action_ts_info`, `action_ts_note` | File ships with Production (`connect2.tsanet.org`); use `connect2.tsanet.net` for Beta. The host appears in every action that calls the TSANet API, not just `action_get_collaboration` — substitute all five or the lifecycle actions will hit the wrong environment |
+| `engineerEmail` | `action_ts_accept` | Replace `YOUR_TSANET_API_EMAIL` with your TSANet API user email. It **must** be on your member-registered domain — TSANet's Accept endpoint rejects emails from any other domain. See *Field-driven case actions* below |
 
 Connection names (`tsanet_oauth`, `zendesk`) match the Quick Start and need no change if you followed it.
+
+> Validated end-to-end on Beta (`connect2.tsanet.net`): authenticated webhook deliveries return 200 and the flow creates Zendesk tickets. The three substitutions above (field IDs, host, `engineerEmail`) are the complete per-instance set — nothing else is environment-specific.
 
 ## Deploy
 
@@ -63,7 +66,7 @@ curl -X POST "https://YOURSUBDOMAIN.zendesk.com/api/services/zis/registry/job_sp
   -H "Authorization: Bearer ZIS_OAUTH_TOKEN"
 ```
 
-The webhook subscription on the TSANet side (callbackUrl = the ingest URL, with its Basic credentials) requires the `callbackAuth` capability tracked in issue #2. Until then, the pipeline can be exercised by POSTing a `WebhookPayload`-shaped body (`eventType`, `requestToken`, `timestamp`) to the ingest URL with the Basic credentials.
+The webhook subscription on the TSANet side uses the `callbackAuth` capability (issue #2), delivered in API **v3.1.0**: register with `callbackUrl` = the ingest URL and `callbackAuth` of type `BASIC` carrying the ingest credentials. TSANet attaches them to every delivery POST alongside the existing `X-Hub-Signature-256` HMAC, and the ZIS ingest accepts the authenticated request (validated on Beta: deliveries return 200 and create tickets). The pipeline can also be exercised without a live subscription by POSTing a `WebhookPayload`-shaped body (`eventType`, `requestToken`, `timestamp`) to the ingest URL with the Basic credentials.
 
 ## Field-driven case actions (no ZAF app required)
 
