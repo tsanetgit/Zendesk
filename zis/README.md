@@ -88,6 +88,45 @@ The bundle also includes `flow_field_action` + `jobspec_field_action` (issue #22
 - **Failure** (wrong case state, missing text, no token): internal comment explaining, Action cleared, Status untouched. Details land in the Integration Log.
 - **Guards:** the flow no-ops unless the changed field is TSANet Action with a non-empty action value — so the flow's own clears, status syncs, and any ZAF field writes never re-trigger it. Safe to run alongside the ZAF app (the two action paths are independent; see issue #22 for the coexistence analysis).
 
+## Inbound comment forwarding — public reply → partner note (issue #34)
+
+When an agent posts a **public reply** on a TSANet ticket, it is forwarded to the partner as a TSANet note, so the partner sees agent replies without anyone re-typing them. **Internal** comments are never forwarded — only public content reaches the partner.
+
+```
+Agent posts a PUBLIC reply on a TSANet ticket (inbound or outbound)
+  → Zendesk trigger  (comment is public  AND  tag tsanet_inbound OR tsanet_outbound)
+  → Zendesk webhook  (Basic auth)
+  → ZIS inbound webhook   (source_system "zendesk", event_type "public_comment")
+  → jobspec_forward_comment → flow_forward_comment
+        GuardToken → GuardComment → GuardAuthor (agent/admin only)
+        ForwardNote → action_ts_note → POST /notes   (connection tsanet_oauth)
+```
+
+The flow **reuses `action_ts_note`** (no new action). Loop-safe: the note mirror writes *internal* comments, which never re-fire this *public*-comment trigger.
+
+- **Fail-closed author guard.** `flow_forward_comment` only forwards when `author_role` is `Agent`/`Admin` (the trigger sends `{{current_user.role}}`). An **End-user** public reply never forwards. **Gotcha:** `{{current_user.role}}` renders the literal **`Admin`** (not `Administrator`) — the guard matches `Agent`/`Admin` plus lowercase variants. ZIS `Choice` states only support `StringEquals` (not `StringMatches`), so each accepted value is listed explicitly.
+- **Single-path rule (issue #38).** The ZAF app's public **Add Note** posts only the public comment and lets this trigger deliver it. It must **not** also `POST /notes` itself, or the partner gets the note twice.
+- **Trigger scope.** It fires on `tsanet_inbound` **or** `tsanet_outbound` so public replies forward on both inbound and outbound cases.
+
+### Setup (in addition to the inbound `collaboration_event` webhook in Deploy above)
+
+```bash
+# 1. Create the comment-forwarding inbound webhook (returns its own ingest path + Basic creds — keep them)
+curl -X POST "https://YOURSUBDOMAIN.zendesk.com/api/services/zis/inbound_webhooks/generic/tsanet_connect" \
+  -H "Authorization: Bearer ZIS_OAUTH_TOKEN" -H "Content-Type: application/json" \
+  -d '{"source_system":"zendesk","event_type":"public_comment"}'
+
+# 2. Install its job spec (reinstall after EVERY bundle upload, like the others)
+curl -X POST "https://YOURSUBDOMAIN.zendesk.com/api/services/zis/registry/job_specs/install?job_spec_name=zis:tsanet_connect:job_spec:jobspec_forward_comment" \
+  -H "Authorization: Bearer ZIS_OAUTH_TOKEN"
+```
+
+Then, in **Zendesk Admin** (or via `/api/v2/webhooks` + `/api/v2/triggers`):
+- A **webhook** with **Basic auth** = the step-1 ingest credentials, endpoint = the step-1 ingest URL, JSON.
+- A **trigger** — conditions: *comment is public* AND (current tags include `tsanet_inbound` **or** `tsanet_outbound`); action: notify that webhook with body `{"token":"{{ticket.ticket_field_<TOKEN_FIELD_ID>}}","comment":"{{ticket.latest_public_comment}}","ticket_id":"{{ticket.id}}","author_role":"{{current_user.role}}"}`.
+
+> Updating an existing trigger via the API **replaces** it — include the existing `actions` in the `PUT`, or you get `422 "Trigger must contain at least one action"`.
+
 ## Gotchas (each cost real debugging time — full record in issue #18)
 
 - **Reinstall job specs after every bundle upload.** Uploads orphan existing installs; the flow silently stops firing.

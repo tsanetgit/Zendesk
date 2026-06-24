@@ -158,7 +158,11 @@ The connection from Step 4 does nothing by itself — the flows that create and 
 
 Also create the **basic-auth `zendesk` connection** the bundle's Zendesk-side actions require (see the README's prerequisites).
 
-> Direct webhook delivery from TSANet to the ingest URL requires the `callbackAuth` capability tracked in [issue #2](https://github.com/tsanetgit/Zendesk/issues/2). Until it ships, the pipeline can be exercised by POSTing a `WebhookPayload`-shaped body to the ingest URL with its Basic credentials.
+> **Inbound push is live.** TSANet → ZIS webhook delivery uses the `callbackAuth` capability ([issue #2](https://github.com/tsanetgit/Zendesk_App/issues/2)), delivered in API **v3.1.0** and validated on Beta (authenticated deliveries return 200 and create tickets). Register the member's webhook subscription with `callbackUrl` = the ingest URL and a `callbackAuth` of type `BASIC` carrying the ingest credentials. You can still exercise the pipeline manually by POSTing a `WebhookPayload`-shaped body to the ingest URL with its Basic credentials.
+
+### Inbound comment forwarding (optional, recommended)
+
+The bundle can also forward an agent's **public reply** to the partner as a TSANet note (issue #34) — so the partner sees agent replies automatically. **Internal** comments are never forwarded; only public replies reach the partner. It needs a second inbound webhook (`source_system: zendesk`, `event_type: public_comment`) plus a Zendesk webhook + trigger. Full setup is in [`zis/README.md` → *Inbound comment forwarding*](zis/README.md).
 
 **If you are not implementing the optional SLA monitor, you are finished here.**
 

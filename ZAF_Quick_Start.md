@@ -1,7 +1,7 @@
 # TSANet Connect — ZAF App Quick Start Guide
 
-**App version:** v1.0.31  
-**Last updated:** May 2026  
+**App version:** v1.0.41  
+**Last updated:** June 2026  
 **Time to complete:** ~30 minutes
 
 This guide gets the TSANet Connect sidebar app installed and working in your Zendesk instance. When done, agents will see all active TSANet collaboration cases directly on every ticket.
@@ -17,7 +17,7 @@ Before starting, make sure you have:
 | Zendesk Admin access | You need Apps & Integrations → Private Apps permission |
 | TSANet API credentials | Email membership@tsanet.org to request a dedicated API user |
 | TSANet environment | BETA (`connect2.tsanet.net`) or PRODUCTION (`connect2.tsanet.org`) |
-| App ZIP file | `tsanet-connect-v1.0.31.zip` (from the [latest release](https://github.com/tsanetgit/Zendesk/releases)) |
+| App ZIP file | `tsanet-connect-v1.0.41.zip` (from the [latest release](https://github.com/tsanetgit/Zendesk_App/releases)) |
 
 ---
 
@@ -43,7 +43,7 @@ The app uses four custom ticket fields to store TSANet data. Create each one in 
 1. Go to **Admin Center → Apps and Integrations → Zendesk Support Apps**
 2. Click **Upload private app** (top-right)
 3. Give it a name: `TSANet Connect`
-4. Upload `tsanet-connect-v1.0.31.zip`
+4. Upload `tsanet-connect-v1.0.41.zip`
 5. Click **Upload**
 
 Zendesk will validate the package and show the installation settings screen.
@@ -125,14 +125,29 @@ The sidebar panel adapts based on whether the current ticket is linked to a TSAN
   - 🔴 Red: under 30 minutes remaining
   - ⚠️ BREACHED: deadline passed
 - **Partner engineer contact details** (once accepted)
-- **Action buttons:** Accept, Reject, Request Info, Respond, Add Note (Subject + Details fields), Close (outbound only)
+- **Action buttons:** Accept, Reject, Request Info, Respond, Add Note (Subject + Details, with a **Public / Internal** choice), Close (outbound only)
 
 **Background behavior (always active while Zendesk is open):**
-- Polls TSANet every 5 minutes for new inbound collaboration requests and auto-creates Zendesk tickets
+- Inbound cases are created **server-side by ZIS push** — the TSANet webhook delivers to ZIS (secured by callbackAuth) and a Zendesk ticket is created automatically. The sidebar's 5-minute poll is now a **fallback** that defers to push, so no duplicate ticket is created when push is working.
 - Checks for SLA breaches and adds the `tsanet_sla_breached` tag to overdue tickets, firing the email trigger
-- Mirrors TSANet collaboration notes to the Zendesk ticket thread as **internal comments** — agents can read partner communication directly in the ticket without opening the sidebar
+- Mirrors TSANet collaboration notes to the Zendesk ticket thread as **internal comments** — agents can read partner communication directly in the ticket without opening the sidebar. A note that is your own forwarded **public** reply is skipped, so it doesn't echo back as a duplicate internal comment.
 
 > **SLA scope:** The countdown and breach alerting only apply to the **initial acknowledgment** deadline. Once a case is Accepted, Rejected, or Info Requested, TSANet stops tracking the SLA and the countdown disappears.
+
+---
+
+## Notes: Public vs Internal
+
+Notes can go to two different audiences. The **Add Note** dialog (and a normal Zendesk reply) let you control which:
+
+| You do | Goes to the **partner**? | Visible to the **end customer**? |
+|---|---|---|
+| **Add Note → Internal** (default) | No | No — internal Zendesk comment only |
+| **Add Note → Public** | **Yes** (forwarded as a TSANet note) | Yes — posted as a public reply |
+| Type a normal **public reply** in the Zendesk composer | **Yes** (forwarded automatically) | Yes |
+| Type a normal **internal note** in Zendesk | No | No |
+
+The rule: **only public content reaches the partner; internal notes stay in Zendesk.** Public replies are forwarded to the partner automatically by a Zendesk trigger (see the ZIS Quick Start) — so a public **Add Note** simply posts the public reply and lets that trigger deliver it, rather than sending it twice.
 
 ---
 
