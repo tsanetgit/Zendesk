@@ -677,6 +677,11 @@
                 },
                 {
                   "Variable": "$.input.author_role",
+                  "StringEquals": "Admin",
+                  "Next": "ForwardNote"
+                },
+                {
+                  "Variable": "$.input.author_role",
                   "StringEquals": "Administrator",
                   "Next": "ForwardNote"
                 },
