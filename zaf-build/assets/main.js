@@ -474,7 +474,7 @@ function syncInboundCases() {
               comment: {
                 body: '\u2b05\ufe0f Inbound TSANet Collaboration Request from ' + c.submitCompanyName +
                   '.\n\nPriority: ' + c.priority + '\nToken: ' + c.token +
-                  '\n\nUse the TSANet Connect app to Accept, Request Info, or Reject.',
+                  '\n\nTo respond, set the TSANet Action field (Accept / Request Info / Reject) and submit the ticket, or use the TSANet Connect app in the sidebar.',
                 public: false
               },
               custom_fields: [

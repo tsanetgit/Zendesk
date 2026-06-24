@@ -31,6 +31,14 @@
   var _jwt     = null;
   var _jwtExp  = 0;
 
+  // ZIS-push coexistence (tsanetgit/Zendesk_App#30): when an authenticated
+  // webhook (callbackAuth) is registered on the TSANet side, ZIS push is the
+  // primary ticket creator; the poller then only backfills a missing ticket
+  // after a grace window, so it stops racing push and creating duplicates.
+  var PUSH_FALLBACK_GRACE_MS = 3 * 60 * 1000;
+  var _pushRegistered    = null; // true/false once known; null = not yet checked
+  var _firstSeenNoTicket = {};   // token -> ms first seen open-inbound without a ticket
+
   // ── Init ──────────────────────────────────────────────────────────────────
   if (typeof ZAFClient === 'undefined') {
     console.error('[TSANet BG] ZAFClient not available');
@@ -49,6 +57,16 @@
       }
 
       console.log('[TSANet BG] Started — polling every 1 minute');
+
+      // One-time check: is ZIS push (an authenticated webhook) registered? If so,
+      // the poller becomes a fallback that defers ticket creation to push (#30).
+      tsanetGet('/webhooks').then(function(subs) {
+        _pushRegistered = Array.isArray(subs) && subs.some(function(s) {
+          return s && s.callbackAuthType && s.callbackAuthType !== 'NONE';
+        });
+        console.log('[TSANet BG] ZIS push registered: ' + _pushRegistered +
+                    ' (poller is ' + (_pushRegistered ? 'fallback' : 'primary') + ')');
+      }).catch(function() { _pushRegistered = false; });
 
       // Run immediately on startup, then on POLL_INTERVAL_MS
       pollForInboundCases();
@@ -189,7 +207,15 @@
           return { collab: collab, exists: true }; // assume exists on error — be conservative
         });
       })).then(function(checked) {
-        var toCreate = checked.filter(function(r) { return !r.exists; });
+        checked.forEach(function(r) { if (r.exists) delete _firstSeenNoTicket[r.collab.token]; });
+        var now = Date.now();
+        var toCreate = checked.filter(function(r) {
+          if (r.exists) return false;
+          var tok = r.collab.token;
+          if (_pushRegistered === false) { delete _firstSeenNoTicket[tok]; return true; } // no push: poller is primary
+          if (!_firstSeenNoTicket[tok]) _firstSeenNoTicket[tok] = now;                     // push (or unknown): defer, backfill only after grace
+          return (now - _firstSeenNoTicket[tok]) >= PUSH_FALLBACK_GRACE_MS;
+        });
 
         if (!toCreate.length) {
           console.log('[TSANet BG] All inbound cases already have Zendesk tickets');
@@ -219,7 +245,7 @@
                   body: '\u2b05\ufe0f New inbound TSANet Collaboration Request from ' +
                     c.submitCompanyName + '.\n\nPriority: ' + c.priority +
                     '\nToken: ' + c.token +
-                    '\n\nUse the TSANet Connect app to Accept, Request Info, or Reject.',
+                    '\n\nTo respond, set the TSANet Action field (Accept / Request Info / Reject) and submit the ticket, or use the TSANet Connect app in the sidebar.',
                   public: false
                 },
                 custom_fields: [
