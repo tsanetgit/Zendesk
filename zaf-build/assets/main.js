@@ -1,8 +1,10 @@
 /**
- * TSANet Connect ZAF App — v1.0.38
+ * TSANet Connect ZAF App — v1.0.40
  * client.metadata() with .then() chains after app.registered
  * Includes: New Collaboration, Sync Inbound Cases, action buttons,
- * forwarded-reply echo suppression in syncNotesToZendesk (issue #34)
+ * forwarded-reply echo suppression in syncNotesToZendesk (issue #34),
+ * per-note public/internal toggle in Add Note — internal notes stay in
+ * Zendesk only (never propagated to TSANet)
  */
 (function() {
 'use strict';
@@ -388,7 +390,12 @@ function syncNotesToZendesk(notes, ourCompany) {
         // comment). Partner notes are never suppressed, even on a text collision.
         var selfAuthored = ourCompany && note.companyName === ourCompany;
         if (selfAuthored) {
-          var noteText = normForMatch(note.summary);
+          // Match the note's full text (summary + any distinct description) against
+          // public comments — covers both a forwarded reply (summary only) and a
+          // ZAF note marked public (summary + details).
+          var combined = (note.summary || '') +
+            (note.description && note.description !== note.summary ? ' ' + note.description : '');
+          var noteText = normForMatch(combined);
           if (noteText && publicBodies.indexOf(noteText) !== -1) return false;
         }
         return true;
@@ -543,10 +550,12 @@ document.getElementById('modal-ok').addEventListener('click', function() {
   var wrap2 = document.getElementById('modal-input2-wrap');
   var value = inp.style.display !== 'none' ? inp.value.trim() : true;
   var value2 = (wrap2 && wrap2.style.display !== 'none') ? inp2.value.trim() : null;
+  var pubWrap = document.getElementById('modal-public-wrap');
+  var isPublic = (pubWrap && pubWrap.style.display !== 'none') && document.getElementById('modal-public').checked;
   var cb = _modalCb;
   _modalCb = null;
   document.getElementById('tsanet-modal').style.display = 'none';
-  if (cb) cb(value, value2);
+  if (cb) cb(value, value2, isPublic);
 });
 
 document.getElementById('modal-cancel').addEventListener('click', function() {
@@ -776,6 +785,8 @@ function showPrompt(msg, callback) {
   var wrap2 = document.getElementById('modal-input2-wrap');
   wrap2.style.display = 'none';
   document.getElementById('modal-input2').value = '';
+  var pubWrap = document.getElementById('modal-public-wrap');
+  if (pubWrap) pubWrap.style.display = 'none';
   document.getElementById('tsanet-modal').style.display = 'block';
   setTimeout(function() { inp.focus(); }, 30);
 }
@@ -794,6 +805,9 @@ function showPrompt2(msg, label1, label2, callback) {
   var wrap2 = document.getElementById('modal-input2-wrap');
   wrap2.style.display = 'block';
   document.getElementById('modal-input2').value = '';
+  // Note modal: offer the public/internal choice (default internal).
+  var pubWrap = document.getElementById('modal-public-wrap');
+  if (pubWrap) { pubWrap.style.display = 'block'; document.getElementById('modal-public').checked = false; }
   document.getElementById('tsanet-modal').style.display = 'block';
   setTimeout(function() { inp.focus(); }, 30);
 }
@@ -804,6 +818,8 @@ function showConfirm(msg, callback) {
   document.getElementById('modal-input1-label').style.display = 'none';
   document.getElementById('modal-input').style.display = 'none';
   document.getElementById('modal-input2-wrap').style.display = 'none';
+  var pubWrap = document.getElementById('modal-public-wrap');
+  if (pubWrap) pubWrap.style.display = 'none';
   document.getElementById('tsanet-modal').style.display = 'block';
 }
 
@@ -858,13 +874,40 @@ function handleClose(token) {
   });
 }
 function handleAddNote(token) {
-  showPrompt2('Add a note:', 'Subject', 'Details', function(subject, details) {
+  showPrompt2('Add a note:', 'Subject', 'Details', function(subject, details, isPublic) {
     if (!subject) return;
-    var body = { summary: subject };
-    if (details) body.description = details;
-    tsanetPost('/collaboration-requests/' + token + '/notes', body)
-      .then(function() { showSuccess('Note added.'); loadCollaborations(); })
-      .catch(function(e) { showError('Note failed: ' + e.message); });
+    if (isPublic) {
+      // Public: send to the partner (TSANet) AND post a public Zendesk reply the
+      // end customer sees. The note mirror suppresses the echo (self-authored +
+      // matches this public comment, issue #34).
+      var body = { summary: subject };
+      if (details) body.description = details;
+      tsanetPost('/collaboration-requests/' + token + '/notes', body)
+        .then(function() { return postNoteComment(subject, details, true); })
+        .then(function() { showSuccess('Note added (public).'); loadCollaborations(); })
+        .catch(function(e) { showError('Note failed: ' + e.message); });
+    } else {
+      // Internal: stays in Zendesk only — NOT propagated to the TSANet webapp.
+      postNoteComment(subject, details, false)
+        .then(function() { showSuccess('Internal note added.'); })
+        .catch(function(e) { showError('Note failed: ' + e.message); });
+    }
+  });
+}
+
+// Write a note's text as a Zendesk comment — public (visible to the end customer)
+// or internal (agent-only). Public notes carry no tsanet-note-id marker; the
+// mirror's self-authored + public-comment-match suppression (issue #34) dedups them.
+function postNoteComment(subject, details, isPublic) {
+  return getTicketId().then(function(ticketId) {
+    var body = subject;
+    if (details && details !== subject) body += '\n\n' + details;
+    return client.request({
+      url: '/api/v2/tickets/' + ticketId + '.json',
+      type: 'PUT',
+      contentType: 'application/json',
+      data: JSON.stringify({ ticket: { comment: { body: body, public: isPublic } } })
+    });
   });
 }
 
