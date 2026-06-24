@@ -665,7 +665,23 @@
                   "Next": "NoOp"
                 }
               ],
-              "Default": "ForwardNote"
+              "Default": "GuardAuthor"
+            },
+            "GuardAuthor": {
+              "Type": "Choice",
+              "Choices": [
+                {
+                  "Variable": "$.input.author_role",
+                  "StringEquals": "agent",
+                  "Next": "ForwardNote"
+                },
+                {
+                  "Variable": "$.input.author_role",
+                  "StringEquals": "admin",
+                  "Next": "ForwardNote"
+                }
+              ],
+              "Default": "NoOp"
             },
             "NoOp": {
               "Type": "Succeed"
