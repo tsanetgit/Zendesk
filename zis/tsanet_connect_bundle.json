@@ -36,6 +36,7 @@
                 }
               ],
               "description": "Inbound TSANet Collaboration Request received.\n\nFrom: {{$.partner_name}}\nPriority: {{$.priority}}\nToken: {{$.requestToken}}\n\n{{$.problem_description}}",
+              "external_id": "{{$.requestToken}}",
               "priority": "normal",
               "subject": "TSANet Inbound from {{$.partner_name}}: {{$.summary}}",
               "tags": [
@@ -65,7 +66,7 @@
       "properties": {
         "definition": {
           "method": "GET",
-          "path": "/api/v2/search.json?query=custom_field_48849323029652:{{$.requestToken}}&type=ticket",
+          "path": "/api/v2/tickets.json?external_id={{$.requestToken}}",
           "connectionName": "zendesk"
         },
         "name": "action_search_ticket"
@@ -183,7 +184,7 @@
                 "partner_name.$": "$.collab.receiveCompanyName",
                 "requestToken.$": "$.collab.token",
                 "respond_by.$": "$.xform.respond_by",
-                "ticket_id.$": "$.search.results[0].id"
+                "ticket_id.$": "$.search.tickets[0].id"
               },
               "ResultPath": "$.update",
               "Type": "Action"
