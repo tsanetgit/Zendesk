@@ -18,7 +18,7 @@
           "requestBody": {
             "ticket": {
               "comment": {
-                "body": "\u2b05\ufe0f New inbound TSANet Collaboration Request from {{$.partner_name}}.\n\nPriority: {{$.priority}}\nToken: {{$.requestToken}}\n\nTo respond, set the TSANet Action field (Accept / Request Info / Reject) and submit the ticket, or use the TSANet Connect app if installed.",
+                "body": "\u2b05\ufe0f New inbound TSANet Collaboration Request from {{$.partner_name}}.\n\nPriority: {{$.priority}}\nToken: {{$.requestToken}}\n\n{{$.problem_description}}\n\nTo respond, set the TSANet Action field (Accept / Request Info / Reject) and submit the ticket, or use the TSANet Connect app if installed.",
                 "public": false
               },
               "custom_fields": [
