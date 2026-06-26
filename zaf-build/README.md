@@ -103,7 +103,7 @@ To find your Field IDs: Admin Center → Objects and rules → Tickets → Field
 - **Zendesk auth** is automatic — ZAF inherits the agent's session via `client.request()`.
 - **No external server** required for the sidebar app itself. All API calls proxy through Zendesk.
 - **Background page** (`assets/background.html`) runs while any agent has Zendesk open — polls TSANet every minute for new inbound cases and SLA breaches. The poll interval is the `POLL_INTERVAL_MS` constant; the JWT is cached ~50 min so the interval does not drive login volume.
-- **Server-side complement:** a GitHub Actions workflow (separate from this bundle, see ZIS Quick Start) refreshes the ZIS bearer token and detects SLA breaches when no agent is online. Both pieces are needed for a complete deployment.
+- **Server-side complement (optional):** a GitHub Actions workflow (separate from this bundle, see ZIS Quick Start) tags tickets on SLA breach when no agent is online. The old ZIS-bearer-token refresh job is retired — ZIS now renews its own Entra tokens — so SLA alerting is the only job this workflow runs, and it's optional convenience (TSANet enforces the acknowledgment SLA server-side regardless).
 - **Stateless** — all state lives in Zendesk ticket fields and the TSANet API. The app holds no database.
 
 ---

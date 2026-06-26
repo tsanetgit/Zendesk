@@ -1,6 +1,6 @@
 ---
 name: tsanet-connect
-description: Expert implementation guide for TSANet Connect integrations with Zendesk. Covers the ZAF sidebar app, ZIS bearer token infrastructure, GitHub Actions automation, Zendesk custom fields, and all known API quirks and gotchas discovered through production implementation.
+description: Expert implementation guide for TSANet Connect integrations with Zendesk. Covers the ZAF sidebar app, ZIS OAuth client-credentials (Microsoft Entra) auth, inbound push delivery via callbackAuth, the optional GitHub Actions SLA monitor, Zendesk custom fields, and all known API quirks and gotchas discovered through production implementation. (The legacy ZIS bearer-token connection and its GitHub Actions refresh job are retired and retained only for reference.)
 trigger: Use when the user is implementing TSANet Connect with Zendesk, building a ZAF (Zendesk Apps Framework) sidebar app for TSANet, setting up ZIS (Zendesk Integration Services) for TSANet, working with the TSANet REST API, configuring GitHub Actions for TSANet token refresh or SLA monitoring, creating Zendesk custom fields for TSANet data, debugging TSANet collaboration case flows, or asks about TSANet Connect, TSANet API, ZAF app, ZIS bearer token, SLA breach detection, or collaboration case lifecycle. Also trigger on "tsanet", "collaboration case", "TSANet token", "respondBy", "ZIS bearer", or "ZAF sidebar" in any implementation context.
 ---
 
@@ -28,16 +28,16 @@ A complete TSANet Connect + Zendesk integration has three layers:
 │  • mirrors TSANet notes → Zendesk internal comments     │
 └─────────────────────────────────────────────────────────┘
 ┌─────────────────────────────────────────────────────────┐
-│  LAYER 2: ZIS Bearer Token (infrastructure)             │
-│  • stores live TSANet JWT inside Zendesk's ZIS layer    │
-│  • enables ZIS flows to call TSANet API without auth    │
-│  • must be refreshed before JWT expires (~60 min)       │
+│  LAYER 2: ZIS OAuth Connection (Entra)                  │
+│  • holds TSANet-issued Entra client credential          │
+│  • mints/renews its own short-lived tokens              │
+│  • no static token to refresh (retires bearer job)      │
 └─────────────────────────────────────────────────────────┘
 ┌─────────────────────────────────────────────────────────┐
-│  LAYER 3: GitHub Actions (server-side automation)       │
-│  • refresh-token job: keeps ZIS bearer connection live  │
-│  • sla-monitor job: tags Zendesk tickets on SLA breach  │
-│  • runs at :00 and :50 every hour, no browser required  │
+│  LAYER 3: GitHub Actions (server-side, optional)        │
+│  • sla-monitor job: tags tickets on SLA breach          │
+│  • runs at :00 and :50 every hour, no browser           │
+│  • token-refresh job retired (Entra self-renews)        │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -70,7 +70,7 @@ Authorization: Bearer <accessToken>
 > **Verify identity after login:** always call `GET /v1/me` during development to confirm credentials and capture `companyId`. The `company.domain` field is important — see Accept bug below.
 
 ### Authentication — OAuth 2.0 client credentials (Microsoft Entra, live / default)
-This is now the **live, default** auth scheme for server-to-server integrations, validated in TSANet's development environment (tracked in issue #1). Inbound webhook delivery (TSANet -> ZIS) uses the `callbackAuth` capability, delivered in API v3.1.0 and validated on Beta.
+This is now the **live, default** auth scheme for server-to-server integrations, validated end to end on TSANet's Beta environment (issue #1 closed). Inbound webhook delivery (TSANet -> ZIS) uses the `callbackAuth` capability, delivered in API v3.1.0 and validated on Beta (issue #2 closed).
 
 - Obtain a token from Microsoft Entra via the **client credentials** grant: `POST https://login.microsoftonline.com/{tenant-id}/oauth2/v2.0/token` with `grant_type=client_credentials`, your TSANet-issued `client_id`/`client_secret`, and `scope=api://{audience}/.default` (TSANet provides the audience value). Pass the result as a Bearer token.
 - **Service principal provisioning is required.** The API accepts an app-only token only if your service principal's object ID has been provisioned by TSANet; provisioning is also what maps your tokens to your member company. Contact TSANet with your service principal OID to be onboarded.
@@ -552,9 +552,7 @@ zip -r your-app-v1.0.0.zip manifest.json assets/ translations/ -x "*.DS_Store"
 
 ## ZIS Bearer Token Setup
 
-> **LEGACY — superseded.** This static-bearer method is retained for reference only. The current method is the OAuth client-credentials (Microsoft Entra) connection documented under **ZIS OAuth Client-Credentials Connection** below; use that for all new work.
-
-> **This pattern is being superseded.** The static bearer-token connection (and the GitHub Actions refresh job that keeps it alive) is the workaround for the TSANet JWT's 60-minute expiry. The replacement — a ZIS **OAuth client-credentials connection** that mints and renews Entra tokens itself — has been validated and is documented below ("ZIS OAuth Client-Credentials Connection"). Use the bearer pattern for Beta/Production until the Entra scheme is generally available; use the OAuth pattern for new work once your service principal is provisioned.
+> **LEGACY — retired, retained for reference only.** This static-bearer method (and the GitHub Actions refresh job that kept it alive) was the workaround for the TSANet JWT's 60-minute expiry. It has been replaced by the ZIS **OAuth client-credentials (Microsoft Entra) connection** that mints and renews Entra tokens itself — validated end to end on Beta, with [issue #1](https://github.com/tsanetgit/Zendesk/issues/1) closed. Use the OAuth client-credentials connection (documented under **ZIS OAuth Client-Credentials Connection** below) for all new work; do not build the bearer-token connection or its refresh job for a new installation.
 
 ZIS needs to store the live TSANet JWT so that ZIS flows can call the TSANet API. This requires three one-time setup steps:
 
@@ -588,7 +586,7 @@ Note: ZIS management endpoints (`/api/services/zis/`) **always return 404 with a
 
 ## ZIS OAuth Client-Credentials Connection (Entra — successor to the bearer pattern)
 
-Once TSANet has provisioned your service principal (see the Entra authentication section), ZIS can hold the long-lived client credential and mint/renew the short-lived Entra tokens itself. No GitHub Actions refresh job, no static bearer connection. Validated end to end in TSANet's development environment.
+Once TSANet has provisioned your service principal (see the Entra authentication section), ZIS can hold the long-lived client credential and mint/renew the short-lived Entra tokens itself. No GitHub Actions refresh job, no static bearer connection. Validated end to end on TSANet's Beta environment (issue #1 closed).
 
 ### Step 1 — Register the OAuth client (scope goes in `default_scopes`)
 ```bash

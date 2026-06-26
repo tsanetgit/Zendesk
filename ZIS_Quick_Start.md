@@ -158,7 +158,7 @@ The connection from Step 4 does nothing by itself — the flows that create and 
 
 Also create the **basic-auth `zendesk` connection** the bundle's Zendesk-side actions require (see the README's prerequisites).
 
-> **Inbound push is live.** TSANet → ZIS webhook delivery uses the `callbackAuth` capability ([issue #2](https://github.com/tsanetgit/Zendesk_App/issues/2)), delivered in API **v3.1.0** and validated on Beta (authenticated deliveries return 200 and create tickets). Register the member's webhook subscription with `callbackUrl` = the ingest URL and a `callbackAuth` of type `BASIC` carrying the ingest credentials. You can still exercise the pipeline manually by POSTing a `WebhookPayload`-shaped body to the ingest URL with its Basic credentials.
+> **Inbound push is live.** TSANet → ZIS webhook delivery uses the `callbackAuth` capability ([issue #2](https://github.com/tsanetgit/Zendesk/issues/2)), delivered in API **v3.1.0** and validated on Beta (authenticated deliveries return 200 and create tickets). Register the member's webhook subscription with `callbackUrl` = the ingest URL and a `callbackAuth` of type `BASIC` carrying the ingest credentials. You can still exercise the pipeline manually by POSTing a `WebhookPayload`-shaped body to the ingest URL with its Basic credentials.
 
 ### Inbound comment forwarding (optional, recommended)
 
@@ -355,12 +355,13 @@ TSANet SLA is acknowledgment-only. Once a case is Accepted, Rejected, or Info Re
 ## Important Limitations
 
 **ZIS scheduled polling is retired**  
-An earlier design included a ZIS flow (`flow_poll_tsanet`) intended to poll TSANet for inbound cases on a schedule. This never functioned due to three layered failures (clock ticket required `new` status, no `requestToken` in automation payload, JWT expiry during execution). The flow remains installed but is permanently dormant — both Zendesk automations that triggered it have been disabled. Inbound case sync is now handled entirely by:
-- **ZAF background poller** — runs every 5 minutes while any agent has Zendesk open
+An earlier design included a ZIS flow (`flow_poll_tsanet`) intended to poll TSANet for inbound cases on a schedule. This never functioned due to three layered failures (clock ticket required `new` status, no `requestToken` in automation payload, JWT expiry during execution). The flow remains installed but is permanently dormant — both Zendesk automations that triggered it have been disabled. Inbound case sync is now handled by:
+- **ZIS push delivery (primary)** — TSANet POSTs each event to the ZIS ingest webhook, secured by `callbackAuth` (see below)
+- **ZAF background poller (fallback)** — runs every 1 minute while any agent has Zendesk open; defers to push and only backfills a ticket push didn't already create
 - **GitHub Actions `sla-monitor`** — server-side SLA breach detection regardless of browser state
 
-**ZIS inbound webhook is blocked**  
-TSANet's webhook notifications are sent without an `Authorization` header, which ZIS requires for inbound webhook flows. Until TSANet adds configurable webhook authentication, ZIS cannot receive push notifications from TSANet. The ZAF background poller covers this gap via polling. A `callbackAuth` capability on webhook registration is planned to resolve this — tracked in [issue #2](https://github.com/tsanetgit/Zendesk/issues/2).
+**ZIS inbound webhook — resolved (push is live)**  
+This was previously blocked: ZIS inbound webhook flows require an `Authorization` header on every POST, but TSANet's webhook system sent only an HMAC-SHA256 signature, so direct delivery returned 401. TSANet added the `callbackAuth` capability to its webhook registration API (delivered in Connect API **v3.1.0**), which closes the gap — [issue #2](https://github.com/tsanetgit/Zendesk/issues/2) is closed. Register the member's webhook subscription with a `callbackAuth` of type `BASIC` carrying the ingest credentials; TSANet then attaches Basic Auth on every delivery alongside the HMAC signature, and ZIS accepts the authenticated request. Validated end to end on Beta (deliveries return 200 and create exactly one ticket per case).
 
 **Zendesk Views API cannot set custom field columns**  
 If you create or modify a Zendesk view via the API and include `custom_field_XXXXXXX` column IDs in `execution.columns`, the API accepts the request without error but silently reverts to the original columns. Custom field columns on views must be configured manually in **Admin Center → Workspaces → Views**.
