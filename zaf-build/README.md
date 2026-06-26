@@ -101,8 +101,8 @@ To find your Field IDs: Admin Center → Objects and rules → Tickets → Field
 - **ZAF SDK** loads from Zendesk's CDN at runtime — no local npm install needed.
 - **TSANet auth** uses JWT Bearer tokens cached for ~50 minutes; refreshed automatically.
 - **Zendesk auth** is automatic — ZAF inherits the agent's session via `client.request()`.
-- **No external server** required for the sidebar app itself. All API calls proxy through Zendesk.
-- **Background page** (`assets/background.html`) runs while any agent has Zendesk open — polls TSANet every minute for new inbound cases and SLA breaches. The poll interval is the `POLL_INTERVAL_MS` constant; the JWT is cached ~50 min so the interval does not drive login volume.
+- **No external server** required for the sidebar app itself. Zendesk API calls and the TSANet login both go through the ZAF proxy (`client.request()`); the login uses `secure: true`, so the password is inserted server-side and never appears in browser code. The token-based TSANet calls that follow use a direct browser `fetch()` with the short-lived Bearer JWT, which carries no secret.
+- **Background page** (`assets/background.html`) runs while any agent has Zendesk open — polls TSANet every minute for new inbound cases and SLA breaches. The poll interval is the `POLL_INTERVAL_MS` constant; the JWT is cached ~50 min so the interval does not drive login volume. When ZIS push (an authenticated callbackAuth webhook) is registered, push is the primary inbound-ticket creator and the poller defers to it, only backfilling a missing ticket after a grace window.
 - **Server-side complement (optional):** a GitHub Actions workflow (separate from this bundle, see ZIS Quick Start) tags tickets on SLA breach when no agent is online. The old ZIS-bearer-token refresh job is retired — ZIS now renews its own Entra tokens — so SLA alerting is the only job this workflow runs, and it's optional convenience (TSANet enforces the acknowledgment SLA server-side regardless).
 - **Stateless** — all state lives in Zendesk ticket fields and the TSANet API. The app holds no database.
 
