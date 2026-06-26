@@ -1,7 +1,7 @@
 <b>Zendesk Apps Framework integration for TSANet Connect</b>
 
 To use, contact membership@tsanet.org </br>
-Use Issues https://github.com/tsanetgit/Zendesk/issues to log bugs and enhancements.
+Use Issues https://github.com/tsanetgit/Zendesk_App/issues to log bugs and enhancements.
 
 <b>Install Guide and Documentation:</b>
 
@@ -10,7 +10,7 @@ Use Issues https://github.com/tsanetgit/Zendesk/issues to log bugs and enhanceme
 - [Full Implementation Guide (.docx)](Zendesk_PlainLanguage_Implementation_Guide_v2.11.docx)
 
 <b>CURRENT PACKAGE VERSION:</b>
-View the latest release https://github.com/tsanetgit/Zendesk/releases for the package link
+View the latest release https://github.com/tsanetgit/Zendesk_App/releases for the package link
 
 <b>For maintainers — source of truth:</b>
 
