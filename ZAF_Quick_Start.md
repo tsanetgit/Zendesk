@@ -32,7 +32,7 @@ The app uses four custom ticket fields to store TSANet data. Create each one in 
 | TSANet Partner | Text | Stores the partner company name |
 | TSANet Respond By | Date | SLA acknowledgment deadline (auto-cleared on acknowledgment) |
 
-**After creating each field, note its Field ID** (shown in the URL when you click the field, e.g. `48849323029652`). You'll need all four IDs in Step 3.
+**After creating each field, note its Field ID** (shown in the URL when you click the field, e.g. `1234567890`). You'll need all four IDs in Step 3.
 
 > **Optional:** Create a fifth field **TSANet Tokens Multi** (Text) if you need to store multiple token references on a single ticket. Add its ID to the `field_id_tokens_multi` setting.
 
@@ -176,12 +176,12 @@ Zendesk does not support API-based app binary updates. To update:
 
 ## Field ID Reference (TSANet Dev Instance — `d3v-tsanet.zendesk.com`)
 
-> **For reference only** — these IDs are specific to TSANet's internal dev instance. Your Zendesk account will have entirely different IDs. The install dialog ships with empty defaults so you cannot accidentally inherit these values; you must enter your own.
+> **Example only.** The IDs below are placeholders. Your Zendesk account will have entirely different IDs. The install dialog ships with empty defaults, so you must enter your own.
 
-| Field | TSANet Dev ID (do not copy) |
+| Field | Example Field ID (yours will differ) |
 |---|---|
-| TSANet Token | `48849323029652` |
-| TSANet Tokens Multi | `48849323042964` |
-| TSANet Status | `48849333960724` |
-| TSANet Partner | `48849315296660` |
-| TSANet Respond By | `48849323088276` |
+| TSANet Token | `1234567890` |
+| TSANet Tokens Multi | `1234567891` |
+| TSANet Status | `1234567892` |
+| TSANet Partner | `1234567893` |
+| TSANet Respond By | `1234567894` |
