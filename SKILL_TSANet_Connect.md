@@ -552,7 +552,7 @@ zip -r your-app-v1.0.0.zip manifest.json assets/ translations/ -x "*.DS_Store"
 
 ## ZIS Bearer Token Setup
 
-> **LEGACY — retired, retained for reference only.** This static-bearer method (and the GitHub Actions refresh job that kept it alive) was the workaround for the TSANet JWT's 60-minute expiry. It has been replaced by the ZIS **OAuth client-credentials (Microsoft Entra) connection** that mints and renews Entra tokens itself — validated end to end on Beta, with [issue #1](https://github.com/tsanetgit/Zendesk/issues/1) closed. Use the OAuth client-credentials connection (documented under **ZIS OAuth Client-Credentials Connection** below) for all new work; do not build the bearer-token connection or its refresh job for a new installation.
+> **LEGACY — retired, retained for reference only.** This static-bearer method (and the GitHub Actions refresh job that kept it alive) was the workaround for the TSANet JWT's 60-minute expiry. It has been replaced by the ZIS **OAuth client-credentials (Microsoft Entra) connection** that mints and renews Entra tokens itself — validated end to end on Beta, with [issue #1](https://github.com/tsanetgit/Zendesk_App/issues/1) closed. Use the OAuth client-credentials connection (documented under **ZIS OAuth Client-Credentials Connection** below) for all new work; do not build the bearer-token connection or its refresh job for a new installation.
 
 ZIS needs to store the live TSANet JWT so that ZIS flows can call the TSANet API. This requires three one-time setup steps:
 

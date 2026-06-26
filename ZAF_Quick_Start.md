@@ -17,7 +17,7 @@ Before starting, make sure you have:
 | Zendesk Admin access | You need Apps & Integrations → Private Apps permission |
 | TSANet API credentials | Email membership@tsanet.org to request a dedicated API user |
 | TSANet environment | BETA (`connect2.tsanet.net`) or PRODUCTION (`connect2.tsanet.org`) |
-| App ZIP file | `tsanet-connect-v1.0.41.zip` (from the [latest release](https://github.com/tsanetgit/Zendesk/releases)) |
+| App ZIP file | `tsanet-connect-v1.0.41.zip` (from the [latest release](https://github.com/tsanetgit/Zendesk_App/releases)) |
 
 ---
 
