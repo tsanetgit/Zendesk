@@ -17,7 +17,7 @@ Before starting, make sure you have:
 | Zendesk Admin access | You need Apps & Integrations → Private Apps permission |
 | TSANet API credentials | Email membership@tsanet.org to request a dedicated API user |
 | TSANet environment | BETA (`connect2.tsanet.net`) or PRODUCTION (`connect2.tsanet.org`) |
-| App ZIP file | `tsanet-connect-v1.0.41.zip` (from the [latest release](https://github.com/tsanetgit/Zendesk_App/releases)) |
+| App ZIP file | `tsanet-connect-v1.0.41.zip` (from the [latest release](https://github.com/tsanetgit/Zendesk/releases)) |
 
 ---
 
@@ -128,7 +128,7 @@ The sidebar panel adapts based on whether the current ticket is linked to a TSAN
 - **Action buttons:** Accept, Reject, Request Info, Respond, Add Note (Subject + Details, with a **Public / Internal** choice), Close (outbound only)
 
 **Background behavior (always active while Zendesk is open):**
-- Inbound cases are created **server-side by ZIS push** — the TSANet webhook delivers to ZIS (secured by callbackAuth) and a Zendesk ticket is created automatically. The sidebar's 5-minute poll is now a **fallback** that defers to push, so no duplicate ticket is created when push is working.
+- Inbound cases are created **server-side by ZIS push** — the TSANet webhook delivers to ZIS (secured by callbackAuth) and a Zendesk ticket is created automatically. The sidebar's 1-minute poll is now a **fallback** that defers to push, so no duplicate ticket is created when push is working.
 - Checks for SLA breaches and adds the `tsanet_sla_breached` tag to overdue tickets, firing the email trigger
 - Mirrors TSANet collaboration notes to the Zendesk ticket thread as **internal comments** — agents can read partner communication directly in the ticket without opening the sidebar. A note that is your own forwarded **public** reply is skipped, so it doesn't echo back as a duplicate internal comment.
 
