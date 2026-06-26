@@ -23,15 +23,15 @@
               },
               "custom_fields": [
                 {
-                  "id": 48849323029652,
+                  "id": 1234567890,
                   "value": "{{$.requestToken}}"
                 },
                 {
-                  "id": 48849333960724,
+                  "id": 1234567892,
                   "value": "tsanet_status_open"
                 },
                 {
-                  "id": 48849315296660,
+                  "id": 1234567893,
                   "value": "{{$.partner_name}}"
                 }
               ],
@@ -95,15 +95,15 @@
               },
               "custom_fields": [
                 {
-                  "id": 48849333960724,
+                  "id": 1234567892,
                   "value": "{{$.collab_status}}"
                 },
                 {
-                  "id": 48849315296660,
+                  "id": 1234567893,
                   "value": "{{$.partner_name}}"
                 },
                 {
-                  "id": 48849323088276,
+                  "id": 1234567894,
                   "value": "{{$.respond_by}}"
                 }
               ]
@@ -250,7 +250,7 @@
                   "value": ""
                 },
                 {
-                  "id": 48849333960724,
+                  "id": 1234567892,
                   "value": "{{$.new_status}}"
                 }
               ]
@@ -469,7 +469,7 @@
               "Type": "Action",
               "ActionName": "zis:common:transform:Jq",
               "Parameters": {
-                "expr": "{ticket_id: .zd.ticket.id, token: (([.zd.ticket.custom_fields[]|select(.id==48849323029652)|.value][0]) // \"\"), text: ((([.zd.ticket.custom_fields[]|select(.id==50243992236436)|.value][0]) // \"\") | tostring | .[0:500])}",
+                "expr": "{ticket_id: .zd.ticket.id, token: (([.zd.ticket.custom_fields[]|select(.id==1234567890)|.value][0]) // \"\"), text: ((([.zd.ticket.custom_fields[]|select(.id==1234567895)|.value][0]) // \"\") | tostring | .[0:500])}",
                 "data.$": "$"
               },
               "ResultPath": "$.ctx",

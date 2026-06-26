@@ -677,7 +677,7 @@ Create these in Admin Center → Objects and rules → Tickets → Fields:
 | TSANet Partner | Text | Stores partner company name |
 | TSANet Respond By | **Date** | YYYY-MM-DD format only |
 
-After creating each field, note the **Field ID** from the URL (e.g. `48849323029652`). These are passed as ZAF app settings.
+After creating each field, note the **Field ID** from the URL (e.g. `1234567890`). These are passed as ZAF app settings.
 
 ### Zendesk Views
 Create a view for agents to monitor active TSANet cases without opening individual tickets.

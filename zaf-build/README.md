@@ -92,7 +92,7 @@ All defaults are intentionally empty. The Zendesk install dialog will block inst
 | `field_id_partner` | ✅ | Numeric Field ID of your TSANet Partner custom field |
 | `field_id_respond_by` | ✅ | Numeric Field ID of your TSANet Respond By custom field |
 
-To find your Field IDs: Admin Center → Objects and rules → Tickets → Fields → click the field → look at the URL (e.g. `…/fields/48849323029652`).
+To find your Field IDs: Admin Center → Objects and rules → Tickets → Fields → click the field → look at the URL (e.g. `…/fields/1234567890`).
 
 ---
 
