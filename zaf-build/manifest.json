@@ -35,7 +35,7 @@
       "secure": true,
       "required": true,
       "default": "",
-      "description": "TSANet API password. Stored as a secure setting. Must not contain a double-quote (\") or backslash (\\) character (it is substituted server-side into a JSON login body)."
+      "description": "TSANet API password. Stored as a secure setting. Avoid double-quote and backslash characters in this value (it is inserted server-side into a JSON login body)."
     },
     {
       "name": "tsanet_env",
