@@ -559,12 +559,12 @@ ZIS needs to store the live TSANet JWT so that ZIS flows can call the TSANet API
 ### Step 1 — Create a ZIS Integration (once per Zendesk subdomain)
 ```bash
 curl -X POST \
-  "https://SUBDOMAIN.zendesk.com/api/services/zis/integrations" \
+  "https://SUBDOMAIN.zendesk.com/api/services/zis/registry/tsanet_connect" \
   -u "EMAIL/token:API_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"integration":{"name":"tsanet_connect","description":"TSANet Connect"}}'
+  -d '{"description":"TSANet Connect"}'
 ```
-409 Conflict = already exists, proceed.
+The integration name goes in the URL path under `/registry/` (the ZIS Registry API create-integration endpoint), not the request body. 409 Conflict = already exists, proceed.
 
 ### Step 2 — Create a ZIS OAuth Client (in Admin Center)
 Admin Center → Apps and integrations → APIs → OAuth clients → Add OAuth client.

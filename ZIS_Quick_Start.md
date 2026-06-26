@@ -79,16 +79,13 @@ Run this once from your terminal (replace values):
 
 ```bash
 curl -s -X POST \
-  "https://YOURSUBDOMAIN.zendesk.com/api/services/zis/integrations" \
+  "https://YOURSUBDOMAIN.zendesk.com/api/services/zis/registry/tsanet_connect" \
   -u "YOUR_EMAIL/token:YOUR_API_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"integration": {"name": "tsanet_connect", "description": "TSANet Connect integration"}}'
+  -d '{"description": "TSANet Connect integration"}'
 ```
 
-Expected response:
-```json
-{ "integration": { "name": "tsanet_connect", ... } }
-```
+The integration name (`tsanet_connect`) goes in the **URL path** under `/registry/`; the body carries only the description. A `200 OK` confirms the integration was created.
 
 > If you get a 409 Conflict, the integration already exists — that's fine, proceed to Step 4.
 
