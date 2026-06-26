@@ -32,7 +32,7 @@
     {
       "name": "tsanet_password",
       "type": "text",
-      "secure": false,
+      "secure": true,
       "required": true,
       "default": "",
       "description": "TSANet API password"

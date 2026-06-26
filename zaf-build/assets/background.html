@@ -51,7 +51,9 @@
     client.metadata().then(function(meta) {
       settings = meta.settings || {};
 
-      if (!settings.tsanet_username || !settings.tsanet_password) {
+      // tsanet_password is a secure setting (not exposed to front-end JS); a
+      // missing/invalid password surfaces on the login call instead.
+      if (!settings.tsanet_username) {
         console.warn('[TSANet BG] Credentials not configured — background polling disabled');
         return;
       }
@@ -88,21 +90,26 @@
 
   function getJwt() {
     if (_jwt && Date.now() < _jwtExp) return Promise.resolve(_jwt);
-    return fetch(baseUrl() + '/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+    // Log in through the ZAF proxy with secure:true so the proxy substitutes
+    // {{setting.tsanet_password}} server-side — the password is never in
+    // front-end JS. Proxy mode (no cors:true) to a domainWhitelist host.
+    return client.request({
+      url: baseUrl() + '/login',
+      type: 'POST',
+      contentType: 'application/json',
+      dataType: 'json',
+      secure: true,
+      data: JSON.stringify({
         username: settings.tsanet_username,
-        password: settings.tsanet_password
+        password: '{{setting.tsanet_password}}'
       })
-    }).then(function(res) {
-      if (!res.ok) throw new Error('TSANet login failed: ' + res.status);
-      return res.json();
     }).then(function(data) {
-      if (!data.accessToken) throw new Error('No accessToken in response');
+      if (!data || !data.accessToken) throw new Error('No accessToken in response');
       _jwt    = data.accessToken;
       _jwtExp = Date.now() + 50 * 60 * 1000; // cache for 50 min
       return _jwt;
+    }, function(err) {
+      throw new Error('TSANet login failed: ' + ((err && err.status) || '?'));
     });
   }
 
