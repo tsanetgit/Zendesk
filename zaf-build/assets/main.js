@@ -1,5 +1,5 @@
 /**
- * TSANet Connect ZAF App — v1.0.41
+ * TSANet Connect ZAF App — v1.0.42
  * Public Add Note: post the public comment only; #35 forwards it (no explicit
  * /notes) so the partner gets it once, not twice (issue #38).
  * client.metadata() with .then() chains after app.registered
@@ -32,7 +32,9 @@ if (typeof ZAFClient === 'undefined') {
     client.metadata().then(function(meta) {
       settings = meta.settings || {};
 
-      if (!settings.tsanet_username || !settings.tsanet_password) {
+      // tsanet_password is a secure setting and is NOT exposed to front-end JS,
+      // so it can't be checked here — a missing/invalid password surfaces on login.
+      if (!settings.tsanet_username) {
         show('loading', false);
         showError('TSANet credentials are empty. Go to Admin Center → Apps → TSANet Connect → Settings and enter your username and password.');
         return;
@@ -68,20 +70,26 @@ function baseUrl() {
 
 function getJwt() {
   if (_jwt && Date.now() < _jwtExpiry) return Promise.resolve(_jwt);
-  return fetch(baseUrl() + '/login', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username: settings.tsanet_username, password: settings.tsanet_password })
-  }).then(function(res) {
-    if (!res.ok) return res.text().then(function(t) {
-      throw new Error('TSANet login failed (HTTP ' + res.status + '). Check credentials. Server: ' + t.substring(0,80));
-    });
-    return res.json();
+  // Log in through the ZAF proxy with secure:true so the proxy substitutes the
+  // {{setting.tsanet_password}} placeholder server-side — the password is never
+  // present in front-end JS. Requires proxy mode (no cors:true) to a
+  // domainWhitelist host. The token-based calls below carry only the JWT.
+  return client.request({
+    url: baseUrl() + '/login',
+    type: 'POST',
+    contentType: 'application/json',
+    dataType: 'json',
+    secure: true,
+    data: JSON.stringify({ username: settings.tsanet_username, password: '{{setting.tsanet_password}}' })
   }).then(function(d) {
-    if (!d.accessToken) throw new Error('TSANet login returned no token');
+    if (!d || !d.accessToken) throw new Error('TSANet login returned no token');
     _jwt = d.accessToken;
     _jwtExpiry = Date.now() + 50 * 60 * 1000;
     return _jwt;
+  }, function(err) {
+    var status = (err && err.status) || '?';
+    var detail = (err && (err.responseText || (err.responseJSON && JSON.stringify(err.responseJSON)))) || '';
+    throw new Error('TSANet login failed (HTTP ' + status + '). Check credentials. Server: ' + String(detail).substring(0, 80));
   });
 }
 

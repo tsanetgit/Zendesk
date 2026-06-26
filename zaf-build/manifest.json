@@ -17,7 +17,7 @@
       "background": "assets/background.html"
     }
   },
-  "version": "1.0.41",
+  "version": "1.0.42",
   "icon": "assets/logo.png",
   "frameworkVersion": "2.0",
   "parameters": [
@@ -32,10 +32,10 @@
     {
       "name": "tsanet_password",
       "type": "text",
-      "secure": false,
+      "secure": true,
       "required": true,
       "default": "",
-      "description": "TSANet API password"
+      "description": "TSANet API password. Stored as a secure setting. Avoid double-quote and backslash characters in this value (it is inserted server-side into a JSON login body)."
     },
     {
       "name": "tsanet_env",
