@@ -1,5 +1,5 @@
 /**
- * TSANet Connect ZAF App — v1.0.41
+ * TSANet Connect ZAF App — v1.0.42
  * Public Add Note: post the public comment only; #35 forwards it (no explicit
  * /notes) so the partner gets it once, not twice (issue #38).
  * client.metadata() with .then() chains after app.registered
