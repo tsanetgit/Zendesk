@@ -246,7 +246,7 @@
               },
               "custom_fields": [
                 {
-                  "id": 50244004053140,
+                  "id": 1234567891,
                   "value": ""
                 },
                 {
@@ -277,7 +277,7 @@
             "ticket": {
               "custom_fields": [
                 {
-                  "id": 50244004053140,
+                  "id": 1234567891,
                   "value": ""
                 }
               ]
@@ -308,7 +308,7 @@
               },
               "custom_fields": [
                 {
-                  "id": 50244004053140,
+                  "id": 1234567891,
                   "value": ""
                 }
               ]
@@ -412,7 +412,7 @@
               "Choices": [
                 {
                   "Variable": "$.input.ticket_event.custom_field.id",
-                  "NumericEquals": 50244004053140,
+                  "NumericEquals": 1234567891,
                   "Next": "GuardValue"
                 }
               ],
