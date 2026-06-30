@@ -270,10 +270,10 @@
         }
       }
     },
-    "action_zd_finish_silent": {
+    "action_zd_finish_note_receipt": {
       "type": "ZIS::Action::Http",
       "properties": {
-        "name": "action_zd_finish_silent",
+        "name": "action_zd_finish_note_receipt",
         "definition": {
           "connectionName": "zendesk",
           "method": "PUT",
@@ -286,6 +286,10 @@
           ],
           "requestBody": {
             "ticket": {
+              "comment": {
+                "body": "{{$.message}}",
+                "public": false
+              },
               "custom_fields": [
                 {
                   "id": 1234567891,
@@ -621,7 +625,7 @@
                 "text.$": "$.ctx.text"
               },
               "ResultPath": "$.ts",
-              "Next": "FinishNote",
+              "Next": "BuildNoteReceipt",
               "Catch": [
                 {
                   "ErrorEquals": [
@@ -632,11 +636,22 @@
                 }
               ]
             },
+            "BuildNoteReceipt": {
+              "Type": "Action",
+              "ActionName": "zis:common:transform:Jq",
+              "Parameters": {
+                "expr": "{message: (\"[TSANet note sent to partner (partner-only)]\\n\\n\" + (.ctx.text // \"\") + \"\\n\\ntsanet-note-id:\" + (.ts.id | tostring))}",
+                "data.$": "$"
+              },
+              "ResultPath": "$.receipt",
+              "Next": "FinishNote"
+            },
             "FinishNote": {
               "Type": "Action",
-              "ActionName": "zis:tsanet_connect:action:action_zd_finish_silent",
+              "ActionName": "zis:tsanet_connect:action:action_zd_finish_note_receipt",
               "Parameters": {
-                "ticket_id.$": "$.ctx.ticket_id"
+                "ticket_id.$": "$.ctx.ticket_id",
+                "message.$": "$.receipt.message"
               },
               "ResultPath": "$.done",
               "End": true

@@ -87,9 +87,25 @@ The bundle also includes `flow_field_action` + `jobspec_field_action` (issue #22
 
 ### Behavior
 
-- **Success:** internal comment + TSANet Status updated + Action field cleared. Exception: **Add Note succeeds silently** — the note mirror is the receipt (prevents double comments).
+- **Success:** internal comment + TSANet Status updated + Action field cleared. **Add Note** writes an internal receipt comment carrying a `tsanet-note-id:<id>` marker instead of updating Status (see *Partner-only notes* below).
 - **Failure** (wrong case state, missing text, no token): internal comment explaining, Action cleared, Status untouched. Details land in the Integration Log.
 - **Guards:** the flow no-ops unless the changed field is TSANet Action with a non-empty action value — so the flow's own clears, status syncs, and any ZAF field writes never re-trigger it. Safe to run alongside the ZAF app (the two action paths are independent; see issue #22 for the coexistence analysis).
+
+### Partner-only notes (native path, issue #69)
+
+Setting **TSANet Action = Add Note** *is* the native partner-only note: `flow_field_action` posts the Action Text to the partner (`POST /notes`) **without** writing a public Zendesk comment, so the partner sees it and the end customer does not. This is the native-Zendesk equivalent of the ZAF app's "Partner only" visibility tier (`tsanetgit/Zendesk_App#56`). No extra setup beyond the TSANet Action field above.
+
+`FinishNote` records a receipt: an **internal** Zendesk comment with the note text plus a `tsanet-note-id:<id>` marker (the id comes from the `POST /notes` response, `$.ts.id`). The marker is what the ZAF note-mirror dedups on, so when the ZAF app is also installed the mirrored copy of the same note is suppressed — exactly one internal record either way, ZAF or no-ZAF.
+
+**Optional one-click macro.** Zendesk macros are per-instance Support config and cannot ship in the ZIS bundle, but partner-only needs no macro to work (set the Action field directly). For one-click UX, create a macro that sets the field — substitute your **TSANet Action** field id for `FIELD_ID`:
+
+```bash
+curl -X POST "https://YOURSUBDOMAIN.zendesk.com/api/v2/macros.json" \
+  -u "YOUR_EMAIL/token:YOUR_API_TOKEN" -H "Content-Type: application/json" \
+  -d '{"macro":{"title":"TSANet: Note to partner (partner-only)","actions":[{"field":"custom_fields_FIELD_ID","value":"tsanet_action_add_note"}]}}'
+```
+
+The agent fills **TSANet Action Text** with the note body, then applies the macro (or sets the dropdown to *Add Note*) and submits.
 
 ## Inbound comment forwarding — public reply → partner note (issue #34)
 
@@ -170,7 +186,7 @@ Bundle `tsanet_connect` · template `2019-10-14` · 12 actions, 3 flows, 3 job s
 | `action_ts_reject` | `tsanet_oauth` | POST | `https://connect2.tsanet.org/v1/collaboration-requests/{token}/rejection` |
 | `action_update_ticket` | `zendesk` | PUT | `/api/v2/tickets/{ticket_id}.json` |
 | `action_zd_finish_fail` | `zendesk` | PUT | `/api/v2/tickets/{ticket_id}.json` |
-| `action_zd_finish_silent` | `zendesk` | PUT | `/api/v2/tickets/{ticket_id}.json` |
+| `action_zd_finish_note_receipt` | `zendesk` | PUT | `/api/v2/tickets/{ticket_id}.json` |
 | `action_zd_finish_status` | `zendesk` | PUT | `/api/v2/tickets/{ticket_id}.json` |
 | `action_zd_get_ticket` | `zendesk` | GET | `/api/v2/tickets/{ticket_id}.json` |
 
@@ -178,13 +194,14 @@ Bundle `tsanet_connect` · template `2019-10-14` · 12 actions, 3 flows, 3 job s
 
 - **`flow_field_action`** — StartAt `GuardField`
   - `AcceptCase` (Action) → `action_ts_accept`
+  - `BuildNoteReceipt` (Action) → `Jq`
   - `CheckToken` (Choice)
   - `Dispatch` (Choice)
   - `Extract` (Action) → `Jq`
   - `FailComment` (Action) → `action_zd_finish_fail`
   - `FinishAccept` (Action) → `action_zd_finish_status`
   - `FinishInfo` (Action) → `action_zd_finish_status`
-  - `FinishNote` (Action) → `action_zd_finish_silent`
+  - `FinishNote` (Action) → `action_zd_finish_note_receipt`
   - `FinishReject` (Action) → `action_zd_finish_status`
   - `GetTicket` (Action) → `action_zd_get_ticket`
   - `GuardField` (Choice)
