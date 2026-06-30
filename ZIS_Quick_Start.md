@@ -347,6 +347,18 @@ ZIS flows are event-driven (triggered by Zendesk events like ticket updates). Th
 **Why is the SLA scope only OPEN cases?**  
 TSANet SLA is acknowledgment-only. Once a case is Accepted, Rejected, or Info Requested (`responded: true`), TSANet stops tracking it. Checking ACCEPTED/CLOSED cases for SLA breaches would produce false positives.
 
+**How does a support agent send a partner-only note (no ZAF app)?**  
+A partner-only note reaches the TSANet partner but stays hidden from the end customer. The agent:
+
+1. Types the note in the **TSANet Action Text** field.
+2. Sets **TSANet Action** to **Add Note** — or applies the one-click **`TSANet: Send partner-only note`** macro (admins create this macro once; it sets the dropdown for the agent).
+3. Submits the ticket.
+
+The flow posts the note to the partner (`POST /notes`) with **no** public comment, and adds an **internal** receipt comment (prefixed `[TSANet note sent to partner (partner-only)]`, carrying a `tsanet-note-id` marker) so there is a Zendesk record whether or not the ZAF app is installed. This is the native equivalent of the ZAF app's "Partner only" tier ([#56](https://github.com/tsanetgit/Zendesk_App/issues/56)); full detail and the macro-creation command are in [`zis/README.md`](zis/README.md). **Important:** Zendesk's native composer toggle is only *Public reply* / *Internal note* and **cannot be extended**, so partner-only must come from the TSANet Action field or the **`TSANet: Send partner-only note`** macro, never the native reply menu.
+
+**What lands on an inbound ticket?**  
+The created ticket carries the TSANet token, status, and partner company, plus — when the collaboration includes submitter contact — a `Submitter: Name <email>` line in the description and opening comment ([#57](https://github.com/tsanetgit/Zendesk_App/issues/57)), so the partner engineer who opened the case is visible without opening the sidebar.
+
 ---
 
 ## Important Limitations

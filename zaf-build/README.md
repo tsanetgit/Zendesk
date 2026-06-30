@@ -104,6 +104,7 @@ To find your Field IDs: Admin Center → Objects and rules → Tickets → Field
 - **No external server** required for the sidebar app itself. Zendesk API calls and the TSANet login both go through the ZAF proxy (`client.request()`); the login uses `secure: true`, so the password is inserted server-side and never appears in browser code. The token-based TSANet calls that follow use a direct browser `fetch()` with the short-lived Bearer JWT, which carries no secret.
 - **Background page** (`assets/background.html`) runs while any agent has Zendesk open — polls TSANet every minute for new inbound cases and SLA breaches. The poll interval is the `POLL_INTERVAL_MS` constant; the JWT is cached ~50 min so the interval does not drive login volume. When ZIS push (an authenticated callbackAuth webhook) is registered, push is the primary inbound-ticket creator and the poller defers to it, only backfilling a missing ticket after a grace window.
 - **Server-side complement (optional):** a GitHub Actions workflow (separate from this bundle, see ZIS Quick Start) tags tickets on SLA breach when no agent is online. The old ZIS-bearer-token refresh job is retired — ZIS now renews its own Entra tokens — so SLA alerting is the only job this workflow runs, and it's optional convenience (TSANet enforces the acknowledgment SLA server-side regardless).
+- **Note visibility is three-way** — the Add Note dialog offers **Internal / Partner only / Public** (`handleAddNote` + `sendPartnerNote`). Partner-only posts the note straight to TSANet with no public Zendesk comment, so the partner sees it and the end customer does not (issue #56). Mirrored notes are labeled by direction — **You** (sent) vs the partner company (received) (issue #62).
 - **Stateless** — all state lives in Zendesk ticket fields and the TSANet API. The app holds no database.
 
 ---
@@ -116,7 +117,7 @@ These are gotchas that took weeks to discover. Search `main.js` for the named fu
 - **`engineerEmail` is a required field on Accept** (TSANet API undocumented). Use `settings.tsanet_username` — the agent's Zendesk email won't satisfy domain validation.
 - **TSANet returns HTML in note descriptions.** Use `stripHtml()` before display.
 - **Zendesk date fields require `YYYY-MM-DD`**, not ISO datetime. Truncate with `.substring(0, 10)`.
-- **Notes mirroring uses a `tsanet-note-id:{id}` marker** embedded in Zendesk comment bodies for deduplication. Don't break the marker format.
+- **Notes mirroring uses a `tsanet-note-id:{id}` marker** embedded in Zendesk comment bodies for deduplication. The ZIS field-driven Add Note receipt stamps the **same** marker (issue #69) so the mirror suppresses its duplicate — don't break the marker format or the two paths will double-post.
 - **SLA countdown is acknowledgment-only** — gate display on `responded === false`. Once Accepted/Rejected/Info-Requested, TSANet stops tracking the deadline.
 - **Close button must be hidden on inbound cases** — TSANet API restricts closure to the submitting party.
 

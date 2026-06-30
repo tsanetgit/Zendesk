@@ -489,7 +489,9 @@ function syncNotesToZendesk(notes, ticketId) {
 
 Call `syncNotesToZendesk(notes, ticketId)` every time you load the notes list for a ticket.
 
-## Inbound Comment Forwarding & Note Visibility (issues #34, #36, #38)
+**Direction labels (issue #62):** label each note by direction in both the sidebar and the mirrored comment — **You** when `note.companyName` === your member company (you sent it), otherwise the partner company (received). Sidebar uses an arrow prefix; the mirrored comment header reads `[TSANet Note -> sent]` vs `[TSANet Note <- received]`. Best-effort: `companyName` is the only available signal and is ambiguous when both orgs share a name (e.g. sandbox "test IBM"); the durable fix is an explicit platform direction field on the note object.
+
+## Inbound Comment Forwarding & Note Visibility (issues #34, #36, #38, #56, #69)
 
 **Rule: only public content reaches the partner; internal notes stay in Zendesk.**
 
@@ -509,10 +511,15 @@ Agent PUBLIC reply on a TSANet ticket (inbound or outbound)
 - **Fail-closed author guard.** The flow forwards only when `author_role` (sent by the trigger as `{{current_user.role}}`) is `Agent`/`Admin`. An **End-user** public reply never forwards. **Gotcha:** `{{current_user.role}}` renders the literal **`Admin`** (not `Administrator`); ZIS `Choice` supports only `StringEquals`, so list each accepted value explicitly (`Agent`, `Admin`, plus lowercase variants).
 - **Loop-safe.** The note mirror writes *internal* comments, which never re-fire this *public*-comment trigger.
 
-### Add Note: public vs internal (ZAF)
-The ZAF **Add Note** dialog has a **Public / Internal** toggle:
-- **Internal** (default) -> an internal Zendesk comment only. **Never** POSTed to TSANet.
+### Note visibility: Internal / Partner-only / Public
+A note has three possible audiences. The ZAF **Add Note** dialog exposes all three as a Visibility choice (issue #56, v1.0.43):
+- **Internal** (default) -> internal Zendesk comment only. **Never** POSTed to TSANet.
+- **Partner only** -> `POST /notes` to the partner with **no** public Zendesk comment, so the end customer never sees it. The note mirrors back as an internal comment (self-authored, matches no public comment, so echo-suppression doesn't drop it), giving the agent a record.
 - **Public** -> posts **only** a public Zendesk comment; the forwarding trigger above delivers it to the partner.
+
+**Native (no-ZAF) path (issue #69):** setting the **TSANet Action** field to **Add Note** is the native partner-only send — `flow_field_action` posts the note and writes an internal **receipt** comment carrying a `tsanet-note-id:<id>` marker (from the `POST /notes` response, `$.ts.id`). The shared marker is what the ZAF mirror dedups on, so there's exactly one internal record whether or not ZAF is installed.
+
+**Zendesk's native composer is binary and cannot be extended.** The built-in *Public reply* / *Internal note* toggle is owned by Zendesk; an app or admin cannot add a third "partner only" option to it. Partner-only is reachable **only** via the ZAF Add Note dialog or the TSANet Action field / macro — agents must be trained to use those, not the native reply menu, which will never show partner-only.
 
 **Single-path rule (issue #38):** a public Add Note must **not** also `POST /notes` itself — doing both makes the partner receive the note twice (the explicit POST plus the trigger re-forwarding the public comment). Post the public comment and let the trigger forward it.
 
@@ -781,5 +788,6 @@ Create in Admin Center → Objects and rules → Business rules → Triggers:
 | `responded` | bool | `false` = SLA clock running; `true` = acknowledged |
 | `submitterCaseNumber` | string | Your case number (set on submission) |
 | `receiverCaseNumber` | string | Partner's case number (set on their acceptance) |
+| `submitterContactDetails` | object | Submitter engineer `{name, email, phone}`. Not always present. The ZIS inbound flow stamps a `Submitter: Name <email>` line onto the created Zendesk ticket from this (issue #57) |
 | `caseNotes` | array | All CaseNoteDTO records — HTML content, strip before display |
 | `caseResponses` | array | Approval, rejection, info request records |

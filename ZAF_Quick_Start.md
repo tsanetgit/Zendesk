@@ -125,29 +125,39 @@ The sidebar panel adapts based on whether the current ticket is linked to a TSAN
   - 🔴 Red: under 30 minutes remaining
   - ⚠️ BREACHED: deadline passed
 - **Partner engineer contact details** (once accepted)
-- **Action buttons:** Accept, Reject, Request Info, Respond, Add Note (Subject + Details, with a **Public / Internal** choice), Close (outbound only)
+- **Action buttons:** Accept, Reject, Request Info, Respond, Add Note (Subject + Details, with an **Internal / Partner only / Public** choice), Close (outbound only)
 
 **Background behavior (always active while Zendesk is open):**
 - Inbound cases are created **server-side by ZIS push** — the TSANet webhook delivers to ZIS (secured by callbackAuth) and a Zendesk ticket is created automatically. The sidebar's 1-minute poll is now a **fallback** that defers to push, so no duplicate ticket is created when push is working.
 - Checks for SLA breaches and adds the `tsanet_sla_breached` tag to overdue tickets, firing the email trigger
-- Mirrors TSANet collaboration notes to the Zendesk ticket thread as **internal comments** — agents can read partner communication directly in the ticket without opening the sidebar. A note that is your own forwarded **public** reply is skipped, so it doesn't echo back as a duplicate internal comment.
+- Mirrors TSANet collaboration notes to the Zendesk ticket thread as **internal comments** — agents can read partner communication directly in the ticket without opening the sidebar. Each note is labeled by direction — **You** for notes you sent, the partner company for notes received (sidebar and mirrored comment). A note that is your own forwarded **public** reply is skipped, so it doesn't echo back as a duplicate internal comment.
 
 > **SLA scope:** The countdown and breach alerting only apply to the **initial acknowledgment** deadline. Once a case is Accepted, Rejected, or Info Requested, TSANet stops tracking the SLA and the countdown disappears.
 
 ---
 
-## Notes: Public vs Internal
+## Notes: Internal / Partner-only / Public
 
-Notes can go to two different audiences. The **Add Note** dialog (and a normal Zendesk reply) let you control which:
+A note can go to three different audiences. The app's **Add Note** dialog gives you all three as a Visibility choice:
 
-| You do | Goes to the **partner**? | Visible to the **end customer**? |
+| Add Note → Visibility | Goes to the **partner**? | Visible to the **end customer**? |
 |---|---|---|
-| **Add Note → Internal** (default) | No | No — internal Zendesk comment only |
-| **Add Note → Public** | **Yes** (forwarded as a TSANet note) | Yes — posted as a public reply |
-| Type a normal **public reply** in the Zendesk composer | **Yes** (forwarded automatically) | Yes |
-| Type a normal **internal note** in Zendesk | No | No |
+| **Internal** (default) | No | No — internal Zendesk comment only |
+| **Partner only** | **Yes** (TSANet note) | No — surfaces as an internal Zendesk comment for your record |
+| **Public** | **Yes** (forwarded as a TSANet note) | Yes — posted as a public reply |
 
-The rule: **only public content reaches the partner; internal notes stay in Zendesk.** Public replies are forwarded to the partner automatically by a Zendesk trigger (see the ZIS Quick Start) — so a public **Add Note** simply posts the public reply and lets that trigger deliver it, rather than sending it twice.
+**Partner-only** is the middle tier: the partner sees it, the end customer does not. It posts the note straight to TSANet and writes no public reply; you still get an internal record on the ticket. (Added in app v1.0.43.)
+
+### Heads-up: Zendesk's native reply menu is only Public / Internal
+
+Zendesk's own composer toggle offers just **Public reply** and **Internal note** — that control belongs to Zendesk and **cannot be extended to a third option**. So partner-only is available **only** through the app's **Add Note** dialog (or, without the app, the **TSANet Action** field — see the ZIS Quick Start). If an agent types directly in the native composer:
+
+| Native composer | Partner? | Customer? |
+|---|---|---|
+| **Public reply** | **Yes** (forwarded automatically) | Yes |
+| **Internal note** | No | No |
+
+There is no native-composer way to reach the partner while hiding from the customer — use **Add Note → Partner only**. Public replies are forwarded to the partner automatically by a Zendesk trigger (see the ZIS Quick Start), so a public **Add Note** simply posts the public reply and lets that trigger deliver it, rather than sending it twice.
 
 ---
 
