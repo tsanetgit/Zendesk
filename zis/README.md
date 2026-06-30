@@ -93,13 +93,26 @@ The bundle also includes `flow_field_action` + `jobspec_field_action` (issue #22
 
 ### Partner-only notes (native path, issue #69)
 
-> **Important — partner-only is NOT in Zendesk's native reply menu.** Zendesk's built-in composer toggle offers only **Public reply** and **Internal note**, and that control is owned by Zendesk: an app or admin **cannot** add a third option to it. Agents will not find a "partner only" choice there. Partner-only is reached **only** via the **TSANet Action** field (set it to *Add Note*), the optional macro below, or — if the ZAF app is installed — the app's own Add Note dialog (`tsanetgit/Zendesk_App#56`). Agents must be trained to use the TSANet Action field / macro rather than reaching for the native composer.
+**Partner-only** means a note that reaches your TSANet partner but stays hidden from the end customer. On the native path (no ZAF app) it is driven by the **TSANet Action** field.
 
-Setting **TSANet Action = Add Note** *is* the native partner-only note: `flow_field_action` posts the Action Text to the partner (`POST /notes`) **without** writing a public Zendesk comment, so the partner sees it and the end customer does not. This is the native-Zendesk equivalent of the ZAF app's "Partner only" visibility tier (`tsanetgit/Zendesk_App#56`). No extra setup beyond the TSANet Action field above.
+#### How a support agent sends a partner-only note
 
-`FinishNote` records a receipt: an **internal** Zendesk comment with the note text plus a `tsanet-note-id:<id>` marker (the id comes from the `POST /notes` response, `$.ts.id`). The marker is what the ZAF note-mirror dedups on, so when the ZAF app is also installed the mirrored copy of the same note is suppressed — exactly one internal record either way, ZAF or no-ZAF.
+1. Open the TSANet ticket.
+2. Type the note in the **TSANet Action Text** field.
+3. Set **TSANet Action** to **Add Note** — or, in one click, apply the **`TSANet: Send partner-only note`** macro (it sets the dropdown for you; see admin setup below).
+4. Submit the ticket.
 
-**Optional one-click macro.** Zendesk macros are per-instance Support config and cannot ship in the ZIS bundle, but partner-only needs no macro to work (set the Action field directly). For one-click UX, create a macro that sets the field — substitute your **TSANet Action** field id for `FIELD_ID`:
+The note is delivered to the partner **only** — the end customer never sees it. An **internal** receipt comment is added to the ticket (prefixed `[TSANet note sent to partner (partner-only)]`) so you have a record of exactly what was sent.
+
+> **Important — partner-only is NOT in Zendesk's native reply menu.** Zendesk's built-in composer toggle offers only **Public reply** and **Internal note**, and that control is owned by Zendesk: an app or admin **cannot** add a third option to it. Agents will not find a "partner only" choice there, and a normal **public reply** reaches the end customer too. Partner-only is reached **only** through the **TSANet Action = Add Note** flow above (or the **`TSANet: Send partner-only note`** macro), or — if the ZAF app is installed — the app's own Add Note dialog (`tsanetgit/Zendesk_App#56`). Train agents to use the TSANet Action field / macro, not the native composer.
+
+#### Under the hood
+
+`flow_field_action` posts the Action Text to the partner (`POST /notes`) **without** writing a public Zendesk comment, then `FinishNote` records the **internal** receipt comment with a `tsanet-note-id:<id>` marker (the id comes from the `POST /notes` response, `$.ts.id`). The marker is what the ZAF note-mirror dedups on, so when the ZAF app is also installed the mirrored copy of the same note is suppressed — exactly one internal record either way, ZAF or no-ZAF.
+
+#### Admin setup — the `TSANet: Send partner-only note` macro (optional)
+
+Zendesk macros are per-instance Support config and **cannot ship in the ZIS bundle**, so each instance creates this macro once. Partner-only still works without it (set the **TSANet Action** dropdown to **Add Note** by hand); the macro is purely a one-click convenience. Substitute your **TSANet Action** field id for `FIELD_ID`:
 
 ```bash
 curl -X POST "https://YOURSUBDOMAIN.zendesk.com/api/v2/macros.json" \
@@ -107,7 +120,7 @@ curl -X POST "https://YOURSUBDOMAIN.zendesk.com/api/v2/macros.json" \
   -d '{"macro":{"title":"TSANet: Send partner-only note","actions":[{"field":"custom_fields_FIELD_ID","value":"tsanet_action_add_note"}]}}'
 ```
 
-The agent fills **TSANet Action Text** with the note body, then applies the macro (or sets the dropdown to *Add Note*) and submits.
+The agent still types the note body into **TSANet Action Text** first (a macro can set the dropdown but cannot capture free-form text), then applies the macro and submits.
 
 ## Inbound comment forwarding — public reply → partner note (issue #34)
 
