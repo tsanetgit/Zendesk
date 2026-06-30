@@ -18,7 +18,7 @@
           "requestBody": {
             "ticket": {
               "comment": {
-                "body": "\u2b05\ufe0f New inbound TSANet Collaboration Request from {{$.partner_name}}.\n\nPriority: {{$.priority}}\nToken: {{$.requestToken}}\n\n{{$.problem_description}}\n\nTo respond, set the TSANet Action field (Accept / Request Info / Reject) and submit the ticket, or use the TSANet Connect app if installed.",
+                "body": "\u2b05\ufe0f New inbound TSANet Collaboration Request from {{$.partner_name}}.{{$.submitter_line}}\n\nPriority: {{$.priority}}\nToken: {{$.requestToken}}\n\n{{$.problem_description}}\n\nTo respond, set the TSANet Action field (Accept / Request Info / Reject) and submit the ticket, or use the TSANet Connect app if installed.",
                 "public": false
               },
               "custom_fields": [
@@ -35,7 +35,7 @@
                   "value": "{{$.partner_name}}"
                 }
               ],
-              "description": "Inbound TSANet Collaboration Request received.\n\nFrom: {{$.partner_name}}\nPriority: {{$.priority}}\nToken: {{$.requestToken}}\n\n{{$.problem_description}}",
+              "description": "Inbound TSANet Collaboration Request received.\n\nFrom: {{$.partner_name}}{{$.submitter_line}}\nPriority: {{$.priority}}\nToken: {{$.requestToken}}\n\n{{$.problem_description}}",
               "external_id": "{{$.requestToken}}",
               "priority": "normal",
               "subject": "TSANet Inbound from {{$.partner_name}}: {{$.summary}}",
@@ -140,10 +140,20 @@
                   "Next": "NoOp"
                 }
               ],
-              "Default": "CreateTicket"
+              "Default": "BuildSubmitter"
             },
             "NoOp": {
               "Type": "Succeed"
+            },
+            "BuildSubmitter": {
+              "Type": "Action",
+              "ActionName": "zis:common:transform:Jq",
+              "Parameters": {
+                "expr": "{n: (.collab.submitterContactDetails.name // \"\"), e: (.collab.submitterContactDetails.email // \"\")} | {submitter_line: (if .n == \"\" and .e == \"\" then \"\" else (\"\\nSubmitter: \" + .n + (if .e == \"\" then \"\" else \" <\" + .e + \">\" end)) end)}",
+                "data.$": "$"
+              },
+              "ResultPath": "$.submitter",
+              "Next": "CreateTicket"
             },
             "CreateTicket": {
               "ActionName": "zis:tsanet_connect:action:action_create_ticket",
@@ -153,6 +163,7 @@
                 "priority.$": "$.collab.priority",
                 "problem_description.$": "$.collab.description",
                 "requestToken.$": "$.collab.token",
+                "submitter_line.$": "$.submitter.submitter_line",
                 "summary.$": "$.collab.summary"
               },
               "ResultPath": "$.created",

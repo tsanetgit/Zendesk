@@ -200,6 +200,7 @@ Bundle `tsanet_connect` · template `2019-10-14` · 12 actions, 3 flows, 3 job s
   - `GuardToken` (Choice)
   - `NoOp` (Succeed)
 - **`flow_handle_ping`** — StartAt `GetCollaboration`
+  - `BuildSubmitter` (Action) → `Jq`
   - `CheckTicketExists` (Choice)
   - `CreateTicket` (Action) → `action_create_ticket`
   - `GetCollaboration` (Action) → `action_get_collaboration`
