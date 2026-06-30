@@ -93,6 +93,8 @@ The bundle also includes `flow_field_action` + `jobspec_field_action` (issue #22
 
 ### Partner-only notes (native path, issue #69)
 
+> **Important — partner-only is NOT in Zendesk's native reply menu.** Zendesk's built-in composer toggle offers only **Public reply** and **Internal note**, and that control is owned by Zendesk: an app or admin **cannot** add a third option to it. Agents will not find a "partner only" choice there. Partner-only is reached **only** via the **TSANet Action** field (set it to *Add Note*), the optional macro below, or — if the ZAF app is installed — the app's own Add Note dialog (`tsanetgit/Zendesk_App#56`). Agents must be trained to use the TSANet Action field / macro rather than reaching for the native composer.
+
 Setting **TSANet Action = Add Note** *is* the native partner-only note: `flow_field_action` posts the Action Text to the partner (`POST /notes`) **without** writing a public Zendesk comment, so the partner sees it and the end customer does not. This is the native-Zendesk equivalent of the ZAF app's "Partner only" visibility tier (`tsanetgit/Zendesk_App#56`). No extra setup beyond the TSANet Action field above.
 
 `FinishNote` records a receipt: an **internal** Zendesk comment with the note text plus a `tsanet-note-id:<id>` marker (the id comes from the `POST /notes` response, `$.ts.id`). The marker is what the ZAF note-mirror dedups on, so when the ZAF app is also installed the mirrored copy of the same note is suppressed — exactly one internal record either way, ZAF or no-ZAF.
@@ -102,7 +104,7 @@ Setting **TSANet Action = Add Note** *is* the native partner-only note: `flow_fi
 ```bash
 curl -X POST "https://YOURSUBDOMAIN.zendesk.com/api/v2/macros.json" \
   -u "YOUR_EMAIL/token:YOUR_API_TOKEN" -H "Content-Type: application/json" \
-  -d '{"macro":{"title":"TSANet: Note to partner (partner-only)","actions":[{"field":"custom_fields_FIELD_ID","value":"tsanet_action_add_note"}]}}'
+  -d '{"macro":{"title":"TSANet: Send partner-only note","actions":[{"field":"custom_fields_FIELD_ID","value":"tsanet_action_add_note"}]}}'
 ```
 
 The agent fills **TSANet Action Text** with the note body, then applies the macro (or sets the dropdown to *Add Note*) and submits.
