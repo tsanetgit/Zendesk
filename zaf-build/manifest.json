@@ -17,7 +17,7 @@
       "background": "assets/background.html"
     }
   },
-  "version": "1.0.42",
+  "version": "1.0.44",
   "icon": "assets/logo.png",
   "frameworkVersion": "2.0",
   "parameters": [

@@ -561,11 +561,15 @@ document.getElementById('modal-ok').addEventListener('click', function() {
   var value = inp.style.display !== 'none' ? inp.value.trim() : true;
   var value2 = (wrap2 && wrap2.style.display !== 'none') ? inp2.value.trim() : null;
   var pubWrap = document.getElementById('modal-public-wrap');
-  var isPublic = (pubWrap && pubWrap.style.display !== 'none') && document.getElementById('modal-public').checked;
+  var visibility = 'internal';
+  if (pubWrap && pubWrap.style.display !== 'none') {
+    var sel = pubWrap.querySelector('input[name="modal-visibility"]:checked');
+    visibility = sel ? sel.value : 'internal';
+  }
   var cb = _modalCb;
   _modalCb = null;
   document.getElementById('tsanet-modal').style.display = 'none';
-  if (cb) cb(value, value2, isPublic);
+  if (cb) cb(value, value2, visibility);
 });
 
 document.getElementById('modal-cancel').addEventListener('click', function() {
@@ -815,9 +819,13 @@ function showPrompt2(msg, label1, label2, callback) {
   var wrap2 = document.getElementById('modal-input2-wrap');
   wrap2.style.display = 'block';
   document.getElementById('modal-input2').value = '';
-  // Note modal: offer the public/internal choice (default internal).
+  // Note modal: offer the visibility choice (internal / partner-only / public; default internal).
   var pubWrap = document.getElementById('modal-public-wrap');
-  if (pubWrap) { pubWrap.style.display = 'block'; document.getElementById('modal-public').checked = false; }
+  if (pubWrap) {
+    pubWrap.style.display = 'block';
+    var def = pubWrap.querySelector('input[name="modal-visibility"][value="internal"]');
+    if (def) def.checked = true;
+  }
   document.getElementById('tsanet-modal').style.display = 'block';
   setTimeout(function() { inp.focus(); }, 30);
 }
@@ -884,9 +892,9 @@ function handleClose(token) {
   });
 }
 function handleAddNote(token) {
-  showPrompt2('Add a note:', 'Subject', 'Details', function(subject, details, isPublic) {
+  showPrompt2('Add a note:', 'Subject', 'Details', function(subject, details, visibility) {
     if (!subject) return;
-    if (isPublic) {
+    if (visibility === 'public') {
       // Public: post a public Zendesk reply only. The #35 trigger forwards it to
       // the partner as a single TSANet note (fires on inbound + outbound). No
       // explicit /notes here — doing both double-sent to the partner (issue #38).
@@ -895,6 +903,13 @@ function handleAddNote(token) {
       postNoteComment(subject, details, true)
         .then(function() { showSuccess('Note added (public).'); loadCollaborations(); })
         .catch(function(e) { showError('Note failed: ' + e.message); });
+    } else if (visibility === 'partner') {
+      // Partner-only (#56): send to the TSANet partner via the API but do NOT post a
+      // public Zendesk reply, so the end customer never sees it. The note mirrors back
+      // as an internal comment on the next sync (partner sees it; customer does not).
+      sendPartnerNote(token, subject, details)
+        .then(function() { showSuccess('Note sent to partner (hidden from customer).'); loadCollaborations(); })
+        .catch(function(e) { showError('Note failed: ' + e.message); });
     } else {
       // Internal: stays in Zendesk only — NOT propagated to the TSANet webapp.
       postNoteComment(subject, details, false)
@@ -902,6 +917,19 @@ function handleAddNote(token) {
         .catch(function(e) { showError('Note failed: ' + e.message); });
     }
   });
+}
+
+// Partner-only note (#56): POST the note to TSANet directly, without writing any
+// public Zendesk comment, so it reaches the partner but not the end customer. The
+// note mirrors back internally on the next sync (not suppressed — it matches no
+// public comment). summary = subject, description = details (the #63 convention).
+// priority is omitted: the existing /notes paths (field-action Add Note and the #34
+// public-comment forwarder) post summary-only successfully, so runtime does not
+// require it despite the spec marking it required.
+function sendPartnerNote(token, subject, details) {
+  var body = { summary: subject };
+  if (details) body.description = details;
+  return tsanetPost('/collaboration-requests/' + token + '/notes', body);
 }
 
 // Write a note's text as a Zendesk comment — public (visible to the end customer)
