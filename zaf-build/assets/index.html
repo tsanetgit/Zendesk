@@ -97,9 +97,18 @@
       <textarea id="modal-input2" rows="4" placeholder=""></textarea>
     </div>
     <div id="modal-public-wrap" style="display:none; margin-bottom:6px;">
+      <div class="modal-field-label">Visibility</div>
+      <label style="display:flex; align-items:flex-start; gap:6px; font-size:11px; color:#1f2d3d; cursor:pointer; margin-bottom:3px;">
+        <input type="radio" name="modal-visibility" value="internal" checked style="margin-top:1px;">
+        <span><strong>Internal</strong> — Zendesk note only, not sent to the partner.</span>
+      </label>
+      <label style="display:flex; align-items:flex-start; gap:6px; font-size:11px; color:#1f2d3d; cursor:pointer; margin-bottom:3px;">
+        <input type="radio" name="modal-visibility" value="partner" style="margin-top:1px;">
+        <span><strong>Partner only</strong> — send to the TSANet partner, hidden from the end customer.</span>
+      </label>
       <label style="display:flex; align-items:flex-start; gap:6px; font-size:11px; color:#1f2d3d; cursor:pointer;">
-        <input type="checkbox" id="modal-public" style="margin-top:1px;">
-        <span><strong>Public</strong> — send to the partner and show the end customer. Unchecked = <strong>internal</strong> Zendesk note only (not sent to the partner).</span>
+        <input type="radio" name="modal-visibility" value="public" style="margin-top:1px;">
+        <span><strong>Public</strong> — send to the partner and show the end customer.</span>
       </label>
     </div>
     <div class="modal-actions">
