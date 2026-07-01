@@ -15,13 +15,13 @@ A Zendesk Apps Framework (ZAF) sidebar app that embeds TSANet Connect collaborat
 Most members should not build from source. Install the pre-built ZIP that TSANet publishes on each release:
 
 > Admin Center → Apps and integrations → Zendesk Support apps → Upload private app
-> Filename: `tsanet-connect-v<version>.zip` — always grab the most recent from the [latest release](https://github.com/tsanetgit/Zendesk_App/releases/latest) (the version matches [`manifest.json`](manifest.json), currently **1.0.42**).
+> Filename: `tsanet-connect-v<version>.zip` — always grab the most recent from the [latest release](https://github.com/tsanetgit/Zendesk_App/releases/latest) (the version matches [`manifest.json`](manifest.json), currently **1.0.43**).
 
 Configure the eight settings (TSANet credentials + your five Zendesk custom field IDs) and you're done. No build tools, no Node, no command line. Five minutes total.
 
-### 2. Customize from this source bundle
+### 2. Customize from this source bundle (not recommended for most members)
 
-If you want to extend the app with company-specific logic (extra panels, additional integrations, branding changes), this source bundle is the starting point.
+If you want to extend the app with company-specific logic (extra panels, additional integrations, branding changes), this source bundle is the starting point. This is only for members who cannot, or will not, use the pre-built ZIP — see [`ZAF_Custom_Build_Guide.md`](../ZAF_Custom_Build_Guide.md) for the full ZAT vs. edit-bundle-directly walkthrough.
 
 ---
 

@@ -7,8 +7,9 @@ Use Issues https://github.com/tsanetgit/Zendesk_App/issues to log bugs and enhan
 
 - [ZAF Quick Start](ZAF_Quick_Start.md)
 - [ZIS Quick Start](ZIS_Quick_Start.md)
-- [Full Implementation Guide (.docx)](Zendesk_PlainLanguage_Implementation_Guide_v2.14.docx)
+- [Full Implementation Guide (.docx)](Zendesk_PlainLanguage_Implementation_Guide_v2.15.docx)
 - [GitHub Actions SLA Monitor (Optional)](GitHub_Actions_SLA_Monitor.md) — externally-hosted add-on, not required for the core integration
+- [ZAF Custom Build Guide (Not Recommended)](ZAF_Custom_Build_Guide.md) — only for members who cannot, or will not, install the pre-built ZIP
 
 <b>CURRENT PACKAGE VERSION:</b>
 View the latest release https://github.com/tsanetgit/Zendesk_App/releases for the package link
