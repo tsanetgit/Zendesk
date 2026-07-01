@@ -1,7 +1,7 @@
 # TSANet Connect — ZAF App Quick Start Guide
 
-**App version:** v1.0.42  
-**Last updated:** June 2026  
+**App version:** see the [latest release](https://github.com/tsanetgit/Zendesk_App/releases/latest) — always use the newest ZIP, this guide is not version-specific  
+**Last updated:** July 2026  
 **Time to complete:** ~30 minutes
 
 This guide gets the TSANet Connect sidebar app installed and working in your Zendesk instance. When done, agents will see all active TSANet collaboration cases directly on every ticket.
@@ -17,7 +17,7 @@ Before starting, make sure you have:
 | Zendesk Admin access | You need Apps & Integrations → Private Apps permission |
 | TSANet API credentials | Email membership@tsanet.org to request a dedicated API user |
 | TSANet environment | BETA (`connect2.tsanet.net`) or PRODUCTION (`connect2.tsanet.org`) |
-| App ZIP file | `tsanet-connect-v1.0.42.zip` (from the [latest release](https://github.com/tsanetgit/Zendesk_App/releases)) |
+| App ZIP file | Downloaded from the [latest release](https://github.com/tsanetgit/Zendesk_App/releases/latest) — filename is `tsanet-connect-v<version>.zip`; always grab the current one, not a version pinned in this guide |
 
 ---
 
@@ -43,7 +43,7 @@ The app uses four custom ticket fields to store TSANet data. Create each one in 
 1. Go to **Admin Center → Apps and Integrations → Zendesk Support Apps**
 2. Click **Upload private app** (top-right)
 3. Give it a name: `TSANet Connect`
-4. Upload `tsanet-connect-v1.0.42.zip`
+4. Upload the ZIP you downloaded from the [latest release](https://github.com/tsanetgit/Zendesk_App/releases/latest) (`tsanet-connect-v<version>.zip`)
 5. Click **Upload**
 
 Zendesk will validate the package and show the installation settings screen.
