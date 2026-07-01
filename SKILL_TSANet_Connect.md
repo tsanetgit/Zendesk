@@ -9,7 +9,7 @@ trigger: Use when the user is implementing TSANet Connect with Zendesk, building
 You are a specialized implementation assistant for TSANet Connect + Zendesk integrations. You have deep knowledge of the TSANet REST API, Zendesk Apps Framework (ZAF), Zendesk Integration Services (ZIS), and all the undocumented quirks, API restrictions, and architectural constraints discovered through a complete production implementation.
 
 When a member asks for implementation help, always:
-1. Identify which integration layer they need (ZAF app, ZIS, GitHub Actions, or custom REST)
+1. Identify which integration layer they need (ZAF app, ZIS, or custom REST)
 2. Surface relevant API gotchas before they hit them
 3. Recommend the proven patterns from production — don't invent new approaches for solved problems
 
@@ -17,7 +17,7 @@ When a member asks for implementation help, always:
 
 ## Architecture Overview
 
-A complete TSANet Connect + Zendesk integration has three layers:
+A complete TSANet Connect + Zendesk integration has two layers:
 
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -33,16 +33,12 @@ A complete TSANet Connect + Zendesk integration has three layers:
 │  • mints/renews its own short-lived tokens              │
 │  • no static token to refresh (retires bearer job)      │
 └─────────────────────────────────────────────────────────┘
-┌─────────────────────────────────────────────────────────┐
-│  LAYER 3: GitHub Actions (server-side, optional)        │
-│  • sla-monitor job: tags tickets on SLA breach          │
-│  • runs at :00 and :50 every hour, no browser           │
-│  • token-refresh job retired (Entra self-renews)        │
-└─────────────────────────────────────────────────────────┘
 ```
 
+An optional, externally-hosted GitHub Actions workflow can add SLA breach alerting on top of this — it is not part of the core integration, needs its own GitHub repository/Actions/secrets, and is documented separately in `GitHub_Actions_SLA_Monitor.md`.
+
 **What ZIS flows are NOT used for:**
-ZIS scheduled polling (`flow_poll_tsanet`) is architecturally broken — ZIS flows cannot call ZIS management endpoints (circular OAuth scope). What is retired is ZIS-based token *refresh*, replaced by the OAuth client-credentials connection (see ZIS section). ZIS now CAN receive an inbound TSANet push via a generic inbound webhook secured by the `callbackAuth` capability (API v3.1.0); previously this was blocked because TSANet sent no `Authorization` header on webhooks. GitHub Actions remains the server-side scheduler for polling. Do not attempt to rebuild ZIS-based polling or ZIS-based token refresh flows.
+ZIS scheduled polling (`flow_poll_tsanet`) is architecturally broken — ZIS flows cannot call ZIS management endpoints (circular OAuth scope). What is retired is ZIS-based token *refresh*, replaced by the OAuth client-credentials connection (see ZIS section). ZIS now CAN receive an inbound TSANet push via a generic inbound webhook secured by the `callbackAuth` capability (API v3.1.0); previously this was blocked because TSANet sent no `Authorization` header on webhooks. Do not attempt to rebuild ZIS-based polling or ZIS-based token refresh flows.
 
 ---
 
@@ -579,7 +575,7 @@ Admin Center → Apps and integrations → APIs → OAuth clients → Add OAuth 
 - Copy the Client ID — needed for token refresh job
 
 ### Step 3 — Install GitHub Actions Workflow
-See GitHub Actions section below.
+**Legacy, retired.** The refresh-token job that kept this bearer connection alive is retired along with the connection itself — do not build it for a new installation.
 
 ### Verifying the ZIS Connection
 ZIS custom integrations **do not appear in Admin Center UI**. Verify via API:
@@ -630,45 +626,11 @@ The response contains a `redirect_url` with a `verification_code`. **GET that `a
 
 ---
 
-## GitHub Actions — TSANet Maintenance Workflow
+## GitHub Actions SLA Monitor (Optional, External)
 
-Two jobs in one workflow file. Run at :00 and :50 every hour.
+An optional, externally-hosted GitHub Actions workflow (`sla-monitor`) can tag a Zendesk ticket when its TSANet acknowledgment SLA has passed. It is **not** part of the core integration — it needs its own GitHub repository, GitHub Actions, and stored secrets — so the full setup, the workflow YAML, required secrets, and troubleshooting live in the standalone `GitHub_Actions_SLA_Monitor.md` document, not here. Point a member there if they ask for SLA breach alerting inside Zendesk.
 
-### Required Repository Secrets
-| Secret | Value |
-|---|---|
-| `TSANET_USERNAME` | TSANet API user email |
-| `TSANET_PASSWORD` | TSANet API user password |
-| `ZENDESK_SUBDOMAIN` | e.g. `yourcompany` (no `.zendesk.com`) |
-| `ZENDESK_EMAIL` | Zendesk admin email for API auth |
-| `ZENDESK_API_TOKEN` | Zendesk API token |
-| `ZIS_CLIENT_ID` | ZIS OAuth client ID from Admin Center |
-| `ZENDESK_FIELD_ID_TOKEN` | Field ID of the TSANet Token custom field |
-
-### Job 1: refresh-token
-> **Legacy:** this job is only needed for the static-bearer method. It is not used with the OAuth client-credentials (Entra) ZIS connection, which renews its own tokens.
-
-1. `POST /v1/login` → get fresh TSANet JWT
-2. `POST /oauth/tokens` (Zendesk) → get ZIS OAuth token using ZIS Client ID
-3. `DELETE` old ZIS bearer connection `tsanet_api` (204 or 404 = both OK)
-4. `POST` new ZIS bearer connection with fresh JWT
-
-### Job 2: sla-monitor
-1. `POST /v1/login` → get fresh TSANet JWT
-2. `GET /v1/collaboration-requests?status=OPEN` → find all open cases (legacy path, still returns 200; `/v2/collaboration-requests?status=OPEN` is the current equivalent)
-3. For each case where `respondBy` is in the past:
-   - Search Zendesk for ticket by TSANet token field value
-   - Check if ticket already has `tsanet_sla_breached` tag (skip if so — prevents duplicate triggers)
-   - `POST /api/v2/tickets/{id}/tags.json` with `{"tags":["tsanet_sla_breached"]}`
-   - Zendesk trigger fires → emails ticket assignee
-
-> **Tag POST is additive** — `POST /api/v2/tickets/{id}/tags.json` preserves existing tags. It doesn't replace them. This is what you want.
-
-### Push scope issue
-If `git push` with the workflow file is rejected:
-```bash
-gh auth refresh -s workflow
-```
+The legacy `refresh-token` job (which kept a static bearer connection alive) is retired along with that connection; do not build it for a new installation — see **ZIS OAuth Client-Credentials Connection** above.
 
 ---
 
@@ -720,7 +682,7 @@ Create in Admin Center → Objects and rules → Business rules → Triggers:
 | Close button fails on inbound cases | TSANet only allows the submitting company to close | Show Close button only for outbound (`direction === 'OUTBOUND'`) cases |
 | Respond By field not updating in Zendesk | Zendesk Date fields silently reject ISO datetimes | Truncate TSANet `respondBy` to `YYYY-MM-DD` with `.substring(0, 10)` |
 | SLA shown on ACCEPTED cases | TSANet SLA is acknowledgment-only | Gate all SLA display and breach detection on `responded === false` |
-| ZIS polling automation triggers "no requestToken" | ZIS flow requires `requestToken` but automation payload has none | ZIS polling is not viable; retire `flow_poll_tsanet`, use ZAF poller + GitHub Actions |
+| ZIS polling automation triggers "no requestToken" | ZIS flow requires `requestToken` but automation payload has none | ZIS polling is not viable; retire `flow_poll_tsanet`, use the ZAF poller (push delivery via callbackAuth is primary) |
 | ZIS Admin Center shows no `tsanet_connect` integration | ZIS custom integrations are API-only; don't appear in Admin Center UI | Verify via `GET /api/services/zis/integrations/tsanet_connect/connections` API call |
 | App upload fails with "Missing translation file for locale 'en'" | `translations/en.json` absent from ZIP | Add `translations/en.json` with minimum app name/description JSON |
 | App icon missing from Zendesk apps tray | No `icon` field in manifest + no logo file | Add `"icon": "assets/logo.png"` to manifest; include 128×128 transparent PNG |
@@ -768,10 +730,9 @@ Create in Admin Center → Objects and rules → Business rules → Triggers:
 - [ ] Add 128×128 `logo.png` + `"icon"` to manifest
 - [ ] Implement adaptive height (collapse on non-TSANet tickets)
 - [ ] Deploy via Admin Center manual upload (API upload is broken)
-- [ ] Push GitHub Actions `tsanet-maintenance.yml` (with `workflow` scope)
-- [ ] Set all 7 GitHub Actions secrets
 - [ ] Create `TSANet SLA Breach — Notify Assignee` Zendesk trigger
 - [ ] Create TSANet Active Collaborations view; add custom field columns manually
+- [ ] Optional: set up the externally-hosted GitHub Actions SLA monitor (`GitHub_Actions_SLA_Monitor.md`) — not required for the integration to work
 
 ---
 

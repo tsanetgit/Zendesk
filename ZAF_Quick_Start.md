@@ -105,6 +105,8 @@ This Zendesk trigger emails the ticket assignee the moment an SLA breach is dete
      ```
 5. Click **Create**
 
+> This trigger fires when the `tsanet_sla_breached` tag is added — normally by the ZAF background poller while an agent has Zendesk open. If you want the tag applied even when no agent is online, see the optional, externally-hosted [GitHub Actions SLA Monitor (Optional)](GitHub_Actions_SLA_Monitor.md) — not required for the integration to work.
+
 ---
 
 ## What the App Does
